@@ -99,6 +99,15 @@ export default function App() {
   const [playerVolume, setPlayerVolume] = useState<number>(0.5);
   const [playerMinimized, setPlayerMinimized] = useState<boolean>(false);
 
+  // Extraction of YouTube IDs
+  const extractYoutubeId = (url: string) => {
+    const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    return match ? match[1] : null;
+  };
+
+  const isYoutubeBgm = musicUrl.includes("youtube.com") || musicUrl.includes("youtu.be");
+  const ytVideoId = isYoutubeBgm ? extractYoutubeId(musicUrl) : null;
+
   // Modal display states
   const [loginOpen, setLoginOpen] = useState(false);
   const [addPromptOpen, setAddPromptOpen] = useState(false);
@@ -163,6 +172,8 @@ export default function App() {
 
   // Audio elements ref
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ytPlayerRef = useRef<any>(null);
+  const [ytApiReady, setYtApiReady] = useState(false);
 
   // Synchronize dynamic background settings & Dark Mode class on documentElement
   useEffect(() => {
@@ -207,9 +218,38 @@ export default function App() {
     setMainSearchQuery("");
   }, []);
 
-  // Update audio parameters and trigger play/pause programmatically
+  // Dynamic load of YouTube API
   useEffect(() => {
-    if (audioRef.current) {
+    if ((window as any).YT && (window as any).YT.Player) {
+      setYtApiReady(true);
+      return;
+    }
+
+    const previousReady = (window as any).onYouTubeIframeAPIReady;
+    (window as any).onYouTubeIframeAPIReady = () => {
+      setYtApiReady(true);
+      if (previousReady) previousReady();
+    };
+
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName("script")[0];
+      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+    } else {
+      const interval = setInterval(() => {
+        if ((window as any).YT && (window as any).YT.Player) {
+          setYtApiReady(true);
+          clearInterval(interval);
+        }
+      }, 500);
+      return () => clearInterval(interval);
+    }
+  }, []);
+
+  // Update audio parameters and trigger play/pause programmatically (for non-YouTube direct link tracks)
+  useEffect(() => {
+    if (audioRef.current && !isYoutubeBgm) {
       audioRef.current.volume = playerVolume;
       if (playerPlaying) {
         audioRef.current.play().catch(err => {
@@ -219,7 +259,111 @@ export default function App() {
         audioRef.current.pause();
       }
     }
-  }, [playerVolume, playerPlaying, musicUrl]);
+  }, [playerVolume, playerPlaying, musicUrl, isYoutubeBgm]);
+
+  // Handle YouTube Player Creation and destruction
+  useEffect(() => {
+    if (!isYoutubeBgm || !ytVideoId || !ytApiReady) {
+      if (ytPlayerRef.current) {
+        try {
+          ytPlayerRef.current.destroy();
+        } catch (e) {
+          console.warn("Error destroying YT player:", e);
+        }
+        ytPlayerRef.current = null;
+      }
+      return;
+    }
+
+    let active = true;
+
+    // Small delay to ensure that the DOM element is mounted
+    const timer = setTimeout(() => {
+      if (!active) return;
+      const placeholder = document.getElementById("youtube-player-placeholder55");
+      if (!placeholder) {
+        console.warn("YouTube player placeholder element not found!");
+        return;
+      }
+
+      if (ytPlayerRef.current) {
+        try {
+          ytPlayerRef.current.destroy();
+        } catch (e) {}
+        ytPlayerRef.current = null;
+      }
+
+      try {
+        ytPlayerRef.current = new (window as any).YT.Player("youtube-player-placeholder55", {
+          height: "0",
+          width: "0",
+          videoId: ytVideoId,
+          playerVars: {
+            autoplay: playerPlaying ? 1 : 0,
+            loop: 1,
+            playlist: ytVideoId,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            modestbranding: 1,
+            rel: 0,
+            showinfo: 0,
+            iv_load_policy: 3,
+          },
+          events: {
+            onReady: (event: any) => {
+              if (!active) return;
+              event.target.setVolume(playerVolume * 100);
+              if (playerPlaying) {
+                event.target.playVideo();
+              } else {
+                event.target.pauseVideo();
+              }
+            },
+            onStateChange: (event: any) => {
+              if (event.data === (window as any).YT.PlayerState.ENDED) {
+                event.target.playVideo();
+              }
+            },
+          },
+        });
+      } catch (err) {
+        console.error("Failed to construct YouTube player:", err);
+      }
+    }, 50);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      if (ytPlayerRef.current) {
+        try {
+          ytPlayerRef.current.destroy();
+        } catch (e) {}
+        ytPlayerRef.current = null;
+      }
+    };
+  }, [isYoutubeBgm, ytVideoId, ytApiReady]);
+
+  // Synchronize playing & volume status to the running YouTube player instance
+  useEffect(() => {
+    if (isYoutubeBgm && ytPlayerRef.current) {
+      try {
+        if (typeof ytPlayerRef.current.setVolume === "function") {
+          ytPlayerRef.current.setVolume(playerVolume * 100);
+        }
+        if (typeof ytPlayerRef.current.getPlayerState === "function") {
+          const state = ytPlayerRef.current.getPlayerState();
+          if (playerPlaying && state !== 1 && state !== 3) {
+            ytPlayerRef.current.playVideo();
+          } else if (!playerPlaying && state === 1) {
+            ytPlayerRef.current.pauseVideo();
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to set play/pause or volume on YouTube player", e);
+      }
+    }
+  }, [playerPlaying, playerVolume, isYoutubeBgm]);
 
   // Gather unique tags for the tag cloud
   const uniqueTags = Array.from(
@@ -229,15 +373,6 @@ export default function App() {
         .flatMap(p => p.tags || [])
     )
   );
-
-  // Extraction of YouTube IDs
-  const extractYoutubeId = (url: string) => {
-    const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    return match ? match[1] : null;
-  };
-
-  const isYoutubeBgm = musicUrl.includes("youtube.com") || musicUrl.includes("youtu.be");
-  const ytVideoId = isYoutubeBgm ? extractYoutubeId(musicUrl) : null;
 
   // Custom password SHA256 matches & Login procedure
   const handleAdminLogin = async (e: React.FormEvent) => {
@@ -647,11 +782,10 @@ export default function App() {
         />
       )}
 
-      {playerPlaying && isYoutubeBgm && ytVideoId && (
-        <iframe
+      {isYoutubeBgm && ytVideoId && (
+        <div
+          id="youtube-player-placeholder55"
           className="fixed opacity-0 pointer-events-none w-0 h-0 z-[-99]"
-          src={`https://www.youtube.com/embed/${ytVideoId}?autoplay=1&loop=1&playlist=${ytVideoId}&controls=0`}
-          allow="autoplay"
         />
       )}
 
