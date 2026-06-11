@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Nunito", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
+}
+
+:root {
+  --bg: #f8fafc;
+  --bg2: #f1f5f9;
+  --bg3: #e2e8f0;
+  --card: #ffffff;
+  --border: #cbd5e1;
+  --border2: #94a3b8;
+  --primary: #7c3aed;
+  --primary-light: #a78bfa;
+  --accent: #f43f5e;
+  --success: #10b981;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --radius: 20px;
+  --radius-sm: 12px;
+  --shadow: 0 10px 25px rgba(124, 58, 237, 0.05);
+
+  /* ZONE-SPECIFIC COLOR PALETTES - ENHANCED PINK PALETTE */
+  --zone-primary: #D38C9D;
+  --zone-primary-light: #E2B4C1;
+  --zone-primary-lighter: #F7DAE7;
+  --zone-accent: #A55166;
+  --zone-accent-light: #D9889E;
+  --zone-bg-gradient: linear-gradient(135deg, #FBF6F9 0%, #F5ECF2 50%, #EFE2EB 100%);
+  --zone-card-glow: rgba(211, 140, 157, 0.12);
+  --zone-border: #E8C8D6;
+  --zone-header-bg: linear-gradient(135deg, #D38C9D 0%, #A55166 100%);
+}
+
+/* DARK MODE UTILITIES */
+:root.dark {
+  --bg: #111827;
+  --bg2: #0f172a;
+  --bg3: #1f2937;
+  --card: #1f2937;
+  --border: #374151;
+  --border2: #4b5563;
+  --text: #f3f4f6;
+  --text-muted: #9ca3af;
+
+  /* ZONE-SPECIFIC DARK MODE */
+  --zone-primary: #E2B4C1;
+  --zone-primary-light: #F0D0DD;
+  --zone-primary-lighter: #5A444C;
+  --zone-accent: #F0A0B3;
+  --zone-accent-light: #D9889E;
+  --zone-bg-gradient: linear-gradient(135deg, #2D1F25 0%, #221A20 50%, #171113 100%);
+  --zone-card-glow: rgba(211, 140, 157, 0.2);
+  --zone-border: #4E3E46;
+  --zone-header-bg: linear-gradient(135deg, #7A3F52 0%, #4E2531 100%);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg);
+  color: var(--text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  min-height: 100vh;
+}
+
+/* Marquee Text Animation */
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+.animate-marquee {
+  display: inline-block;
+  animation: marquee 14s linear infinite;
+  padding-left: 100%;
+}
+
+/* Base custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--zone-primary-light);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--zone-primary);
+}
+
+/* Decorative grids & glowing accents */
+.header-bg-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Sparkle glow effects */
+@keyframes pulsatingGlow {
+  0% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.05); opacity: 0.85; }
+  100% { transform: scale(1); opacity: 0.55; }
+}
+
+.sparkle-glow {
+  animation: pulsatingGlow 6s ease-in-out infinite alternate;
+}

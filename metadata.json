@@ -1,0 +1,6 @@
+{
+  "name": "Viện Tâm Thần Cố Thị",
+  "description": "Hệ thống quản lý phòng khám và danh bạ điều dưỡng Viện Tâm Thần Cố Thị - Khu Bệnh Viện",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
