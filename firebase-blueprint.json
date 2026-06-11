@@ -16,6 +16,14 @@
         "name": {
           "type": "string",
           "description": "Display name in Vietnamese"
+        },
+        "description": {
+          "type": "string",
+          "description": "Mô tả phòng khoa (ví dụ: Khu tập trung chăm sóc các ca bệnh...)"
+        },
+        "location": {
+          "type": "string",
+          "description": "Vị trí phòng khoa (ví dụ: Phòng Thường Niên - Lầu II - Chữa Lành)"
         }
       },
       "required": ["id", "icon", "name"]

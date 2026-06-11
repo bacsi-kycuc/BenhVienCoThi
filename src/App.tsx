@@ -236,6 +236,9 @@ export default function App() {
   // Form Inputs: Add Category (Settings tab)
   const [newCatName, setNewCatName] = useState("");
   const [newCatIcon, setNewCatIcon] = useState("🧠");
+  const [newCatDescription, setNewCatDescription] = useState("");
+  const [newCatLocation, setNewCatLocation] = useState("");
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
 
   // Form Inputs: Diagnostic Registration Form
   const [phdName, setPhdName] = useState("");
@@ -670,16 +673,55 @@ export default function App() {
       alert("Vui lòng nhập tên thể loại mới!");
       return;
     }
-    const safeId = "cat_" + Date.now();
-    const newCat: PromptCategory = {
-      id: safeId,
-      icon: newCatIcon.trim() || "📂",
-      name: newCatName.trim()
-    };
-    setDoc(doc(db, "categories", safeId), newCat)
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `categories/${safeId}`));
+
+    if (editingCatId) {
+      // Edit existing category
+      const updatedCat: PromptCategory = {
+        id: editingCatId,
+        icon: newCatIcon.trim() || "📂",
+        name: newCatName.trim(),
+        description: newCatDescription.trim() || undefined,
+        location: newCatLocation.trim() || undefined
+      };
+      setDoc(doc(db, "categories", editingCatId), updatedCat)
+        .catch(err => handleFirestoreError(err, OperationType.WRITE, `categories/${editingCatId}`));
+      
+      setEditingCatId(null);
+    } else {
+      // Create new category
+      const safeId = "cat_" + Date.now();
+      const newCat: PromptCategory = {
+        id: safeId,
+        icon: newCatIcon.trim() || "📂",
+        name: newCatName.trim(),
+        description: newCatDescription.trim() || undefined,
+        location: newCatLocation.trim() || undefined
+      };
+      setDoc(doc(db, "categories", safeId), newCat)
+        .catch(err => handleFirestoreError(err, OperationType.WRITE, `categories/${safeId}`));
+    }
+
+    // Reset fields
     setNewCatName("");
     setNewCatIcon("🧠");
+    setNewCatDescription("");
+    setNewCatLocation("");
+  };
+
+  const startEditCategory = (cat: PromptCategory) => {
+    setEditingCatId(cat.id);
+    setNewCatName(cat.name);
+    setNewCatIcon(cat.icon);
+    setNewCatDescription(cat.description || "");
+    setNewCatLocation(cat.location || "");
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCatId(null);
+    setNewCatName("");
+    setNewCatIcon("🧠");
+    setNewCatDescription("");
+    setNewCatLocation("");
   };
 
   const handleDeleteCategory = (id: string) => {
@@ -1070,14 +1112,21 @@ export default function App() {
                   setActiveGenre("all");
                   setSelectedTag(null);
                 }}
-                className={`py-3 px-3.5 rounded-2xl font-bold transition-all flex flex-col justify-between border cursor-pointer min-h-[92px] text-left hover:scale-[1.01] active:scale-[0.99] ${
+                className={`relative py-3 px-3.5 rounded-2xl font-bold transition-all flex flex-col justify-between border cursor-pointer min-h-[92px] text-left hover:scale-[1.01] active:scale-[0.99] overflow-hidden ${
                   activeGenre === "all"
-                    ? "bg-gradient-to-br from-[#A55166] to-[#D38C9D] text-white border-transparent shadow-md shadow-pink-500/20"
+                    ? "text-white border-transparent"
                     : "bg-white/50 dark:bg-[#1E2533]/50 hover:bg-rose-100/40 dark:hover:bg-rose-950/20 text-gray-700 dark:text-gray-300 border-pink-100/60 dark:border-pink-900/15"
                 }`}
               >
-                <span className="bg-white/20 p-1 rounded-lg text-sm w-fit mb-1">📋</span>
-                <div className="flex flex-col min-w-0">
+                {activeGenre === "all" && (
+                  <motion.div
+                    layoutId="activeGenreBg"
+                    className="absolute inset-0 bg-gradient-to-br from-[#A55166] to-[#D38C9D] rounded-2xl z-0 shadow-md shadow-pink-500/20"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10 bg-white/20 p-1 rounded-lg text-sm w-fit mb-1">📋</span>
+                <div className="relative z-10 flex flex-col min-w-0">
                   <span className="text-[11px] sm:text-xs truncate font-extrabold leading-tight">Tất cả bệnh án</span>
                   <span className="text-[10px] opacity-75 font-medium mt-0.5">Hiện toàn bộ ({prompts.length})</span>
                 </div>
@@ -1086,6 +1135,7 @@ export default function App() {
               {categories.map(cat => {
                 const isActive = activeGenre === cat.id;
                 const promptCount = prompts.filter(p => p.category === cat.id).length;
+                const tooltipText = `${cat.name}${cat.location ? `\n📍 Vị trí: ${cat.location}` : ""}${cat.description ? `\n📝 Mô tả: ${cat.description}` : ""}`;
                 
                 return (
                   <button
@@ -1094,14 +1144,22 @@ export default function App() {
                       setActiveGenre(cat.id);
                       setSelectedTag(null); // Clear tag filter
                     }}
-                    className={`py-3 px-3.5 rounded-2xl font-bold transition-all flex flex-col justify-between border cursor-pointer min-h-[92px] text-left hover:scale-[1.01] active:scale-[0.99] ${
+                    title={tooltipText}
+                    className={`relative py-3 px-3.5 rounded-2xl font-bold transition-all flex flex-col justify-between border cursor-pointer min-h-[92px] text-left hover:scale-[1.01] active:scale-[0.99] overflow-hidden ${
                       isActive
-                        ? "bg-gradient-to-br from-[#A55166] to-[#D38C9D] text-white border-transparent shadow-md shadow-pink-500/20"
+                        ? "text-white border-transparent"
                         : "bg-white/50 dark:bg-[#1E2533]/50 hover:bg-rose-100/40 dark:hover:bg-rose-950/20 text-gray-700 dark:text-gray-300 border-pink-100/60 dark:border-pink-900/15"
                     }`}
                   >
-                    <span className="bg-white/20 p-1 rounded-lg text-sm w-fit mb-1">{cat.icon || "📂"}</span>
-                    <div className="flex flex-col min-w-0">
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeGenreBg"
+                        className="absolute inset-0 bg-gradient-to-br from-[#A55166] to-[#D38C9D] rounded-2xl z-0 shadow-md shadow-pink-500/20"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    <span className="relative z-10 bg-white/20 p-1 rounded-lg text-sm w-fit mb-1">{cat.icon || "📂"}</span>
+                    <div className="relative z-10 flex flex-col min-w-0">
                       <span className="text-[11px] sm:text-xs truncate font-extrabold leading-tight" title={cat.name}>{cat.name}</span>
                       <span className="text-[10px] opacity-75 font-medium mt-0.5">{promptCount} điều dưỡng</span>
                     </div>
@@ -1225,6 +1283,38 @@ export default function App() {
                   <span className="text-xs italic text-gray-400">Không có thẻ triệu chứng nào tương thích</span>
                 )}
               </div>
+
+              {/* CURRENT ACTIVE DEPT BANNER (Image 2 style) */}
+              {activeGenre !== "all" && (() => {
+                const activeCat = categories.find(c => c.id === activeGenre);
+                if (!activeCat) return null;
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="overflow-hidden bg-[#261E21] dark:bg-[#1C1719] rounded-2xl p-5 border border-pink-900/30 dark:border-pink-950/40 shadow-lg flex flex-col gap-3 text-left"
+                  >
+                    {activeCat.location && (
+                      <div className="w-fit">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#3D252A] border border-pink-900/20 text-[#EA95A7] text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wide">
+                          📍 {activeCat.location}
+                        </span>
+                      </div>
+                    )}
+                    
+                    <h2 className="text-base sm:text-xl font-extrabold text-[#FEDB41] flex items-center gap-2 tracking-tight">
+                      <span>{activeCat.icon || "🏡"}</span>
+                      <span>{activeCat.name}</span>
+                    </h2>
+                    
+                    {activeCat.description && (
+                      <p className="text-xs sm:text-sm text-gray-300 dark:text-gray-400 font-medium leading-relaxed">
+                        {activeCat.description}
+                      </p>
+                    )}
+                  </motion.div>
+                );
+              })()}
 
               {/* MEDICAL INTERACTIVE CARD GRID */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1741,264 +1831,357 @@ export default function App() {
               </div>
 
               {/* Settings tabs row */}
-              <div className="flex gap-2 border-b-2 border-pink-100 dark:border-pink-950/40 mb-6 pb-1 overflow-x-auto whitespace-nowrap">
+              <div className="flex gap-2 border-b-2 border-pink-100 dark:border-pink-950/40 mb-6 pb-1 overflow-x-auto whitespace-nowrap relative">
                 <button
                   onClick={() => setSettingsTab("general")}
-                  className={`px-4 py-2 text-xs font-extrabold transition-all border-b-2 cursor-pointer ${
+                  className={`relative px-4 py-2 text-xs font-extrabold transition-all cursor-pointer ${
                     settingsTab === "general"
-                      ? "text-rose-800 dark:text-rose-300 border-rose-400"
-                      : "text-gray-400 border-transparent hover:text-rose-500"
+                      ? "text-rose-800 dark:text-rose-300"
+                      : "text-gray-400 hover:text-rose-500"
                   }`}
                 >
-                  📋 Tổng quan BGM Banners
+                  <span className="relative z-10">📋 Tổng quan BGM Banners</span>
+                  {settingsTab === "general" && (
+                    <motion.div
+                      layoutId="activeSettingsTabLine"
+                      className="absolute bottom-[-2px] left-0 right-0 h-[2.5px] bg-rose-500 dark:bg-rose-400 z-20"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
                 </button>
                 <button
                   onClick={() => setSettingsTab("categories")}
-                  className={`px-4 py-2 text-xs font-extrabold transition-all border-b-2 cursor-pointer ${
+                  className={`relative px-4 py-2 text-xs font-extrabold transition-all cursor-pointer ${
                     settingsTab === "categories"
-                      ? "text-rose-800 dark:text-rose-300 border-rose-400"
-                      : "text-gray-400 border-transparent hover:text-rose-500"
+                      ? "text-rose-800 dark:text-rose-300"
+                      : "text-gray-400 hover:text-rose-500"
                   }`}
                 >
-                  📂 Quản lý các phòng khoa
+                  <span className="relative z-10">📂 Quản lý các phòng khoa</span>
+                  {settingsTab === "categories" && (
+                    <motion.div
+                      layoutId="activeSettingsTabLine"
+                      className="absolute bottom-[-2px] left-0 right-0 h-[2.5px] bg-rose-500 dark:bg-rose-400 z-20"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
                 </button>
                 <button
                   onClick={() => setSettingsTab("account")}
-                  className={`px-4 py-2 text-xs font-extrabold transition-all border-b-2 cursor-pointer ${
+                  className={`relative px-4 py-2 text-xs font-extrabold transition-all cursor-pointer ${
                     settingsTab === "account"
-                      ? "text-rose-800 dark:text-rose-300 border-rose-400"
-                      : "text-gray-400 border-transparent hover:text-rose-500"
+                      ? "text-rose-800 dark:text-rose-300"
+                      : "text-gray-400 hover:text-rose-500"
                   }`}
                 >
-                  👤 Tài khoản
+                  <span className="relative z-10">👤 Tài khoản</span>
+                  {settingsTab === "account" && (
+                    <motion.div
+                      layoutId="activeSettingsTabLine"
+                      className="absolute bottom-[-2px] left-0 right-0 h-[2.5px] bg-rose-500 dark:bg-rose-400 z-20"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
                 </button>
               </div>
 
               {/* TAB CONTENT: GENERAL (BACKGROUND GRAPHICS & BGM) */}
-              {settingsTab === "general" && (
-                <div className="flex flex-col gap-5">
-                  
-                  {/* Background images section */}
-                  <div>
-                    <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-3">🖼️ Thay hình nền viện tâm thần</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      
-                      {/* Welcome wallpaper */}
-                      <div className="p-3 bg-white dark:bg-black/30 rounded-2xl border border-pink-100 dark:border-pink-900/50 flex flex-col gap-2">
-                        <span className="text-[10px] font-bold text-gray-500">Màn hình khởi đầu (Chào mừng)</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleBgUploadSubmit("welcome", e.target.files ? e.target.files[0] : null)}
-                          className="hidden"
-                          id="file-bg-welcome"
-                        />
-                        <label 
-                          htmlFor="file-bg-welcome"
-                          className="cursor-pointer py-2 px-3 text-center bg-rose-50 hover:bg-rose-100/60 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 font-semibold text-xs border border-dashed border-rose-300 rounded-lg block"
-                        >
-                          Chọn ảnh nền khởi động
-                        </label>
-                        {bgWelcome && (
-                          <div className="flex items-center justify-between gap-1 mt-1">
-                            <span className="text-[9px] text-emerald-500 font-semibold">Active wallpaper loaded</span>
-                            <button 
-                              onClick={() => {
-                                setBgWelcome(null);
-                                localStorage.removeItem("bg_welcome");
-                              }}
-                              className="text-[9px] text-red-500 hover:underline"
-                            >
-                              Gỡ ảnh
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* App Main Workspace wallpaper */}
-                      <div className="p-3 bg-white dark:bg-black/30 rounded-2xl border border-pink-100 dark:border-pink-900/50 flex flex-col gap-2">
-                        <span className="text-[10px] font-bold text-gray-500">Màn hình chính (Bản tin)</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleBgUploadSubmit("app", e.target.files ? e.target.files[0] : null)}
-                          className="hidden"
-                          id="file-bg-app"
-                        />
-                        <label 
-                          htmlFor="file-bg-app"
-                          className="cursor-pointer py-2 px-3 text-center bg-rose-50 hover:bg-rose-100/60 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 font-semibold text-xs border border-dashed border-rose-300 rounded-lg block"
-                        >
-                          Chọn ảnh nền điều hành
-                        </label>
-                        {bgApp && (
-                          <div className="flex items-center justify-between gap-1 mt-1">
-                            <span className="text-[9px] text-emerald-500 font-semibold">Active wallpaper loaded</span>
-                            <button 
-                              onClick={() => {
-                                setBgApp(null);
-                                localStorage.removeItem("bg_app");
-                              }}
-                              className="text-[9px] text-red-500 hover:underline"
-                            >
-                              Gỡ ảnh
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                    </div>
-                  </div>
-
-                  <div className="border-t border-pink-100 dark:border-pink-900/40 my-1 font-serif italic" />
-
-                  {/* Audio soundtracks setup */}
-                  <div>
-                    <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-3">🎵 Cấu Hàng BGM Nhạc Nền</span>
+              <AnimatePresence mode="wait">
+                {settingsTab === "general" && (
+                  <motion.div
+                    key="general"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex flex-col gap-5"
+                  >
                     
-                    <div className="flex flex-col gap-3 p-4 bg-white dark:bg-black/20 rounded-2xl border border-pink-100 dark:border-pink-900/30">
-                      
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-[10px] font-semibold text-gray-400">Link YouTube hoặc direct link ca khúc</span>
-                        <input
-                          type="text"
-                          value={musicUrl}
-                          onChange={(e) => setMusicUrl(e.target.value)}
-                          placeholder="https://www.youtube.com/watch?v=... hoặc link MP3..."
-                          className="w-full py-2 px-3 text-xs rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 font-semibold outline-none"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-[10px] font-semibold text-gray-400">Tiêu đề bài hát hiển thị</span>
-                        <input
-                          type="text"
-                          value={musicTitle}
-                          onChange={(e) => setMusicTitle(e.target.value)}
-                          placeholder="Lofi Chill - Viện Tâm Thần BGM..."
-                          className="w-full py-2 px-3 text-xs rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 font-semibold outline-none"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-[10px] font-semibold text-gray-400">Hoặc tải tập tin nhạc cục bộ (Tối đa 2.5MB)</span>
-                        <input
-                          type="file"
-                          accept="audio/*"
-                          onChange={(e) => handleMusicUploadSubmit(e.target.files ? e.target.files[0] : null)}
-                          className="text-xs text-gray-400"
-                        />
-                      </div>
-
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          type="button"
-                          onClick={saveExternalMusic}
-                          className="flex-1 py-2 rounded-lg bg-rose-400 hover:bg-rose-500 text-white font-bold text-xs"
-                        >
-                          💾 Kích Hoạt Nhạc BGM
-                        </button>
-                        <button
-                          type="button"
-                          onClick={clearMusicControl}
-                          className="px-3.5 py-2 rounded-lg bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-500 hover:text-white font-bold text-xs"
-                        >
-                          Gỡ nhạc
-                        </button>
-                      </div>
-
-                    </div>
-                  </div>
-
-                </div>
-              )}
-
-              {/* TAB CONTENT: CATEGORIES MANAGEMENT */}
-              {settingsTab === "categories" && (
-                <div className="flex flex-col gap-5">
-                  <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block">📂 Bố Trí Khoa Phòng Khám Mới</span>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-white dark:bg-black/20 p-4 rounded-2xl border border-pink-100 dark:border-pink-900/50">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-bold text-gray-400">Icon / Biểu thị</span>
-                      <input
-                        type="text"
-                        value={newCatIcon}
-                        onChange={(e) => setNewCatIcon(e.target.value)}
-                        placeholder="🧠"
-                        className="py-1.5 px-2.5 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/30 font-bold text-sm"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-bold text-gray-400">Tên Phòng Khoa Mới</span>
-                      <input
-                        type="text"
-                        value={newCatName}
-                        onChange={(e) => setNewCatName(e.target.value)}
-                        placeholder="Khoa Tâm Thần Cực Nhẹ..."
-                        className="py-1.5 px-2.5 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/30 font-semibold text-xs"
-                      />
-                    </div>
-                    <button
-                      onClick={handleAddCategory}
-                      className="sm:col-span-2 py-2 rounded-xl bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 text-white font-extrabold text-xs shadow-sm shadow-pink-400/20"
-                    >
-                      ➕ Thêm Thể Loại
-                    </button>
-                  </div>
-
-                  <div className="border-t border-pink-100 dark:border-pink-900/30 font-semibold" />
-
-                  {/* Category lists displaying */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide">📋 Hồ sơ các phòng khoa hiện có:</span>
-                    <div className="max-h-48 overflow-y-auto flex flex-col gap-2 pr-1">
-                      {categories.map(cat => (
-                        <div 
-                          key={cat.id} 
-                          className="flex items-center justify-between p-2.5 bg-white dark:bg-black/30 rounded-xl border border-pink-100 dark:border-pink-900/30"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="bg-pink-100 dark:bg-pink-950 p-1 rounded-lg text-sm">{cat.icon}</span>
-                            <span className="text-xs font-bold text-rose-800 dark:text-rose-300">{cat.name}</span>
-                          </div>
-                          
-                          <button
-                            onClick={() => handleDeleteCategory(cat.id)}
-                            className="p-1 px-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold transition-all"
+                    {/* Background images section */}
+                    <div>
+                      <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-3">🖼️ Thay hình nền viện tâm thần</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        
+                        {/* Welcome wallpaper */}
+                        <div className="p-3 bg-white dark:bg-black/30 rounded-2xl border border-pink-100 dark:border-pink-900/50 flex flex-col gap-2">
+                          <span className="text-[10px] font-bold text-gray-500">Màn hình khởi đầu (Chào mừng)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleBgUploadSubmit("welcome", e.target.files ? e.target.files[0] : null)}
+                            className="hidden"
+                            id="file-bg-welcome"
+                          />
+                          <label 
+                            htmlFor="file-bg-welcome"
+                            className="cursor-pointer py-2 px-3 text-center bg-rose-50 hover:bg-rose-100/60 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 font-semibold text-xs border border-dashed border-rose-300 rounded-lg block"
                           >
-                            Gỡ bỏ
+                            Chọn ảnh nền khởi động
+                          </label>
+                          {bgWelcome && (
+                            <div className="flex items-center justify-between gap-1 mt-1">
+                              <span className="text-[9px] text-emerald-500 font-semibold">Active wallpaper loaded</span>
+                              <button 
+                                onClick={() => {
+                                  setBgWelcome(null);
+                                  localStorage.removeItem("bg_welcome");
+                                }}
+                                className="text-[9px] text-red-500 hover:underline"
+                              >
+                                Gỡ ảnh
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* App Main Workspace wallpaper */}
+                        <div className="p-3 bg-white dark:bg-black/30 rounded-2xl border border-pink-100 dark:border-pink-900/50 flex flex-col gap-2">
+                          <span className="text-[10px] font-bold text-gray-500">Màn hình chính (Bản tin)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleBgUploadSubmit("app", e.target.files ? e.target.files[0] : null)}
+                            className="hidden"
+                            id="file-bg-app"
+                          />
+                          <label 
+                            htmlFor="file-bg-app"
+                            className="cursor-pointer py-2 px-3 text-center bg-rose-50 hover:bg-rose-100/60 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 font-semibold text-xs border border-dashed border-rose-300 rounded-lg block"
+                          >
+                            Chọn ảnh nền điều hành
+                          </label>
+                          {bgApp && (
+                            <div className="flex items-center justify-between gap-1 mt-1">
+                              <span className="text-[9px] text-emerald-500 font-semibold">Active wallpaper loaded</span>
+                              <button 
+                                onClick={() => {
+                                  setBgApp(null);
+                                  localStorage.removeItem("bg_app");
+                                }}
+                                className="text-[9px] text-red-500 hover:underline"
+                              >
+                                Gỡ ảnh
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    </div>
+
+                    <div className="border-t border-pink-100 dark:border-pink-900/40 my-1 font-serif italic" />
+
+                    {/* Audio soundtracks setup */}
+                    <div>
+                      <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-3">🎵 Cấu Hàng BGM Nhạc Nền</span>
+                      
+                      <div className="flex flex-col gap-3 p-4 bg-white dark:bg-black/20 rounded-2xl border border-pink-100 dark:border-pink-900/30">
+                        
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-semibold text-gray-400">Link YouTube hoặc direct link ca khúc</span>
+                          <input
+                            type="text"
+                            value={musicUrl}
+                            onChange={(e) => setMusicUrl(e.target.value)}
+                            placeholder="https://www.youtube.com/watch?v=... hoặc link MP3..."
+                            className="w-full py-2 px-3 text-xs rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 font-semibold outline-none"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-semibold text-gray-400">Tiêu đề bài hát hiển thị</span>
+                          <input
+                            type="text"
+                            value={musicTitle}
+                            onChange={(e) => setMusicTitle(e.target.value)}
+                            placeholder="Lofi Chill - Viện Tâm Thần BGM..."
+                            className="w-full py-2 px-3 text-xs rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 font-semibold outline-none"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-semibold text-gray-400">Hoặc tải tập tin nhạc cục bộ (Tối đa 2.5MB)</span>
+                          <input
+                            type="file"
+                            accept="audio/*"
+                            onChange={(e) => handleMusicUploadSubmit(e.target.files ? e.target.files[0] : null)}
+                            className="text-xs text-gray-400"
+                          />
+                        </div>
+
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={saveExternalMusic}
+                            className="flex-1 py-2 rounded-lg bg-rose-400 hover:bg-rose-500 text-white font-bold text-xs"
+                          >
+                            💾 Kích Hoạt Nhạc BGM
+                          </button>
+                          <button
+                            type="button"
+                            onClick={clearMusicControl}
+                            className="px-3.5 py-2 rounded-lg bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-500 hover:text-white font-bold text-xs"
+                          >
+                            Gỡ nhạc
                           </button>
                         </div>
-                      ))}
+
+                      </div>
                     </div>
-                  </div>
 
-                </div>
-              )}
+                  </motion.div>
+                )}
 
-              {/* TAB CONTENT: ADMIN ACCOUNT & LOGOUT */}
-              {settingsTab === "account" && (
-                <div className="flex flex-col gap-5">
-                  <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block">👤 QUẢN LÝ TÀI KHOẢN ADMIN</span>
-                  
-                  <div className="p-5 bg-white dark:bg-black/20 rounded-2xl border border-pink-100 dark:border-pink-900/40 text-center flex flex-col items-center gap-3">
-                    <span className="text-3xl">🔐</span>
-                    <h5 className="font-bold text-xs text-rose-800 dark:text-rose-300">Tài khoản Quản trị viên</h5>
-                    <p className="text-[11px] text-gray-500 max-w-xs leading-relaxed">
-                      Bạn đang đăng nhập bằng quyền tối cao của Viện trưởng. Hãy thận trọng với mọi thao tác thay đổi phòng ban y tế.
-                    </p>
+                {/* TAB CONTENT: CATEGORIES MANAGEMENT */}
+                {settingsTab === "categories" && (
+                  <motion.div
+                    key="categories"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex flex-col gap-5"
+                  >
+                    <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block">
+                      📂 {editingCatId ? "Cập Nhật Hồ Sơ Khoa Phòng" : "Bố Trí Khoa Phòng Khám Mới"}
+                    </span>
                     
-                    <button
-                      type="button"
-                      onClick={() => setShowLogoutConfirm(true)}
-                      className="mt-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
-                    >
-                      <LogOut size={13} /> Đăng xuất tài khoản
-                    </button>
-                  </div>
-                </div>
-              )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-white dark:bg-black/20 p-4 rounded-2xl border border-pink-100 dark:border-pink-900/50">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold text-gray-400">Icon / Biểu thị</span>
+                        <input
+                          type="text"
+                          value={newCatIcon}
+                          onChange={(e) => setNewCatIcon(e.target.value)}
+                          placeholder="🧠"
+                          className="py-1.5 px-2.5 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/30 font-bold text-sm"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold text-gray-400">Tên Phòng Khoa {editingCatId ? "Cần Sửa" : "Mới"}</span>
+                        <input
+                          type="text"
+                          value={newCatName}
+                          onChange={(e) => setNewCatName(e.target.value)}
+                          placeholder="Khoa Tâm Thần Cực Nhẹ..."
+                          className="py-1.5 px-2.5 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/30 font-semibold text-xs"
+                        />
+                      </div>
+                      
+                      <div className="flex flex-col gap-1 sm:col-span-2">
+                        <span className="text-[10px] font-bold text-gray-400">Vị Trí Phòng Khoa (ví dụ: PHÒNG THƯỜNG NIÊN - LẦU II)</span>
+                        <input
+                          type="text"
+                          value={newCatLocation}
+                          onChange={(e) => setNewCatLocation(e.target.value)}
+                          placeholder="Tòa Nhà A - Lầu II - Khu Chữa Lành..."
+                          className="py-1.5 px-2.5 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/30 font-semibold text-xs"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1 sm:col-span-2">
+                        <span className="text-[10px] font-bold text-gray-400">Mô Tả Phòng Khoa</span>
+                        <textarea
+                          value={newCatDescription}
+                          onChange={(e) => setNewCatDescription(e.target.value)}
+                          placeholder="Khu tập trung chăm sóc các ca bệnh mang sắc thái..."
+                          maxLength={400}
+                          rows={2}
+                          className="py-1.5 px-2.5 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/30 font-medium text-xs resize-none"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2 flex gap-2 mt-1">
+                        <button
+                          onClick={handleAddCategory}
+                          className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 text-white font-extrabold text-xs shadow-sm shadow-pink-400/20"
+                        >
+                          {editingCatId ? "💾 Lưu Thay Đổi" : "➕ Thêm Thể Loại"}
+                        </button>
+                        {editingCatId && (
+                          <button
+                            onClick={cancelEditCategory}
+                            className="px-4 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold text-xs"
+                          >
+                            Hủy
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-pink-100 dark:border-pink-900/30 font-semibold" />
+
+                    {/* Category lists displaying */}
+                    <div className="flex flex-col gap-2">
+                      <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide">📋 Hồ sơ các phòng khoa hiện có:</span>
+                      <div className="max-h-52 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1">
+                        {categories.map(cat => (
+                          <div 
+                            key={cat.id} 
+                            className="flex flex-col justify-between p-2.5 bg-white dark:bg-black/30 rounded-xl border border-pink-100 dark:border-pink-900/30 gap-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="bg-pink-100 dark:bg-pink-950 p-1.5 rounded-lg text-base flex-shrink-0">{cat.icon}</span>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-bold text-rose-800 dark:text-rose-300 truncate">{cat.name}</span>
+                                {cat.location && (
+                                  <span className="text-[9px] text-gray-500 truncate">📍 {cat.location}</span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="flex gap-1.5 justify-end">
+                              <button
+                                onClick={() => startEditCategory(cat)}
+                                className="p-1 px-2.5 rounded-lg bg-pink-100 dark:bg-[#3D252A] text-rose-700 dark:text-rose-300 text-[10px] font-bold hover:bg-pink-205 transition-all"
+                              >
+                                Sửa
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCategory(cat.id)}
+                                className="p-1 px-2.5 rounded-lg bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-[10px] font-bold hover:bg-red-200 transition-all"
+                              >
+                                Gỡ bỏ
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </motion.div>
+                )}
+
+                {/* TAB CONTENT: ADMIN ACCOUNT & LOGOUT */}
+                {settingsTab === "account" && (
+                  <motion.div
+                    key="account"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex flex-col gap-5"
+                  >
+                    <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block">👤 QUẢN LÝ TÀI KHOẢN ADMIN</span>
+                    
+                    <div className="p-5 bg-white dark:bg-black/20 rounded-2xl border border-pink-100 dark:border-pink-900/40 text-center flex flex-col items-center gap-3">
+                      <span className="text-3xl">🔐</span>
+                      <h5 className="font-bold text-xs text-rose-800 dark:text-rose-300">Tài khoản Quản trị viên</h5>
+                      <p className="text-[11px] text-gray-500 max-w-xs leading-relaxed">
+                        Bạn đang đăng nhập bằng quyền tối cao của Viện trưởng. Hãy thận trọng với mọi thao tác thay đổi phòng ban y tế.
+                      </p>
+                      
+                      <button
+                        type="button"
+                        onClick={() => setShowLogoutConfirm(true)}
+                        className="mt-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+                      >
+                        <LogOut size={13} /> Đăng xuất tài khoản
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Modal dismiss buttons */}
               <div className="mt-8 pt-3 border-t border-pink-200 dark:border-pink-900/50 flex justify-end">
@@ -2131,50 +2314,82 @@ export default function App() {
               </div>
 
               {/* PHD Navigation Tabs */}
-              <div className="flex gap-2 px-5 pt-3.5 border-b border-pink-100 dark:border-pink-900/35 overflow-x-auto whitespace-nowrap">
+              <div className="flex gap-2 px-5 pt-3.5 border-b border-pink-100 dark:border-pink-900/35 overflow-x-auto whitespace-nowrap relative">
                 <button
                   onClick={() => setPhdTab("find")}
-                  className={`px-4 py-2.5 rounded-t-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition-all ${
+                  className={`relative px-4 py-2.5 rounded-t-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition-all overflow-hidden ${
                     phdTab === "find"
-                      ? "bg-[#A55166] text-white"
+                      ? "text-white"
                       : "bg-[#F7DAE7]/30 dark:bg-[#5A444C]/35 text-[#A55166] dark:text-[#E2B4C1] hover:bg-[#F7DAE7]/50"
                   }`}
                 >
-                  🔍 Tìm Bác sĩ
+                  <span className="relative z-10 flex items-center gap-1">🔍 Tìm Bác sĩ</span>
+                  {phdTab === "find" && (
+                    <motion.div
+                      layoutId="activePhdTabBg"
+                      className="absolute inset-0 bg-[#A55166]"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
                 </button>
                 <button
                   onClick={() => setPhdTab("register")}
-                  className={`px-4 py-2.5 rounded-t-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition-all ${
+                  className={`relative px-4 py-2.5 rounded-t-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition-all overflow-hidden ${
                     phdTab === "register"
-                      ? "bg-[#A55166] text-white"
+                      ? "text-white"
                       : "bg-[#F7DAE7]/30 dark:bg-[#5A444C]/35 text-[#A55166] dark:text-[#E2B4C1] hover:bg-[#F7DAE7]/50"
                   }`}
                 >
-                  💊 Khám Bệnh Mới
+                  <span className="relative z-10 flex items-center gap-1">💊 Khám Bệnh Mới</span>
+                  {phdTab === "register" && (
+                    <motion.div
+                      layoutId="activePhdTabBg"
+                      className="absolute inset-0 bg-[#A55166]"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
                 </button>
                 <button
                   onClick={() => setPhdTab("records")}
-                  className={`px-4 py-2.5 rounded-t-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all relative ${
+                  className={`relative px-4 py-2.5 rounded-t-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all overflow-hidden ${
                     phdTab === "records"
-                      ? "bg-[#A55166] text-white"
+                      ? "text-white"
                       : "bg-[#F7DAE7]/30 dark:bg-[#5A444C]/35 text-[#A55166] dark:text-[#E2B4C1] hover:bg-[#F7DAE7]/50"
                   }`}
                 >
-                  📒 Sổ Khám 
-                  {phdRecords.length > 0 && (
-                    <span className="bg-rose-500 text-white rounded-full text-[9px] w-4.5 h-4.5 flex items-center justify-center font-bold">
-                      {phdRecords.length}
-                    </span>
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    📒 Sổ Khám 
+                    {phdRecords.length > 0 && (
+                      <span className={`rounded-full text-[9px] w-4.5 h-4.5 flex items-center justify-center font-bold ${
+                        phdTab === "records" ? "bg-white text-[#A55166]" : "bg-rose-500 text-white"
+                      }`}>
+                        {phdRecords.length}
+                      </span>
+                    )}
+                  </span>
+                  {phdTab === "records" && (
+                    <motion.div
+                      layoutId="activePhdTabBg"
+                      className="absolute inset-0 bg-[#A55166]"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
                   )}
                 </button>
               </div>
 
               {/* TAB CONTENT PORT */}
               <div className="p-5 overflow-y-auto flex-1">
-
-                {/* TAB 1: SEARCH DOCTOR / CHUYÊN KHOA BENTO GRID */}
-                {phdTab === "find" && (
-                  <div className="flex flex-col gap-4">
+                <AnimatePresence mode="wait">
+                  {/* TAB 1: SEARCH DOCTOR / CHUYÊN KHOA BENTO GRID */}
+                  {phdTab === "find" && (
+                    <motion.div
+                      key="find"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.15 }}
+                      className="flex flex-col gap-4"
+                    >
                     <div className="text-center">
                       <h4 className="font-serif italic font-bold text-[#A55166] dark:text-[#F0A0B3] text-lg">
                         Bạn đã đặt lịch hẹn hay muốn khám lâm sàng nhanh?
@@ -2287,12 +2502,18 @@ export default function App() {
 
                       </div>
                     )}
-                  </div>
+                  </motion.div>
                 )}
 
                 {/* TAB 2: REGISTER NEW CLINICAL ENTRY */}
                 {phdTab === "register" && (
-                  <div>
+                  <motion.div
+                    key="register"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.15 }}
+                  >
                     {!phdSuccessSubmitted ? (
                       <form onSubmit={handlePhdFormSubmit} className="flex flex-col gap-4">
                         
@@ -2461,12 +2682,19 @@ export default function App() {
                         <span className="text-[10px] text-gray-400">Vui lòng chờ giây lát...</span>
                       </div>
                     )}
-                  </div>
+                  </motion.div>
                 )}
 
                 {/* TAB 3: MEDICAL HISTORY LISTING (SỔ KHÁM) */}
                 {phdTab === "records" && (
-                  <div className="flex flex-col gap-4">
+                  <motion.div
+                    key="records"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex flex-col gap-4"
+                  >
                     
                     {/* Search and filters columns inside Sổ Khám */}
                     <div className="flex flex-col sm:flex-row gap-3">
@@ -2593,8 +2821,9 @@ export default function App() {
                       )}
                     </div>
 
-                  </div>
+                  </motion.div>
                 )}
+                </AnimatePresence>
 
               </div>
 

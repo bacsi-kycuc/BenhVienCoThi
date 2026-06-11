@@ -1,11 +1,11 @@
 import { PromptCategory, Prompt } from "./types";
 
 export const DEFAULT_CATEGORIES: PromptCategory[] = [
-  { id: "psychiatry", icon: "🧠", name: "Tâm thần" },
-  { id: "neurology", icon: "🔬", name: "Thần kinh" },
-  { id: "cardiology", icon: "❤️", name: "Tim mạch" },
-  { id: "epidemiology", icon: "🦠", name: "Dịch tễ" },
-  { id: "pediatrics", icon: "🧸", name: "Nhi khoa" }
+  { id: "psychiatry", icon: "🧠", name: "Tâm thần", description: "Khoa chẩn đoán hoang tưởng và mê muội cực độ, phù hợp với các hồ sơ kịch tính phức tạp.", location: "Phân khu đặc biệt - Tòa nhà A - Lầu I" },
+  { id: "neurology", icon: "🔬", name: "Thần kinh", description: "Khoa lưu trữ thông tin phản xạ và giải phẫu tính cách độc đáo của các nhân vật.", location: "Khu vực chụp CT - Hành lang Lầu II" },
+  { id: "cardiology", icon: "❤️", name: "Tim mạch", description: "Hỗ trợ theo dõi tim đập loạn nhịp, co giật cơ ngực nhẹ trước các giáo sư soái ca.", location: "Phòng cấp cứu - Tòa nhà B - Trực diện cổng chính" },
+  { id: "epidemiology", icon: "🦠", name: "Dịch tễ", description: "Theo dõi và phòng chống các chủng virus mê đắm, simp chúa lây lan cực mạnh.", location: "Phòng cách ly - Khu vực tách biệt phía sau" },
+  { id: "pediatrics", icon: "🧸", name: "Nhi khoa", description: "Nơi ôm ấp giữ gìn những trái tim mầm non bé bỏng, ngây thơ cần chở che.", location: "Phòng đồ chơi - Cạnh sảnh chính" }
 ];
 
 export const DEFAULT_PROMPTS: Prompt[] = [

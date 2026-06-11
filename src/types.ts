@@ -6,6 +6,8 @@ export interface PromptCategory {
   id: string;
   icon: string;
   name: string;
+  description?: string;
+  location?: string;
 }
 
 export interface Prompt {
