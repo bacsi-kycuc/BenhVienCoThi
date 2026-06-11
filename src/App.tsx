@@ -45,6 +45,15 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
+import { 
+  collection, 
+  doc, 
+  onSnapshot, 
+  setDoc, 
+  deleteDoc 
+} from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "./firebase";
+
 export default function App() {
   // Screens & Navigation
   const [screen, setScreen] = useState<"welcome" | "app">("welcome");
@@ -60,20 +69,96 @@ export default function App() {
   });
 
   // Core Data Lists
-  const [categories, setCategories] = useState<PromptCategory[]>(() => {
-    const stored = localStorage.getItem("categories");
-    return stored ? JSON.parse(stored) : DEFAULT_CATEGORIES;
-  });
+  const [categories, setCategories] = useState<PromptCategory[]>(DEFAULT_CATEGORIES);
+  const [prompts, setPrompts] = useState<Prompt[]>(DEFAULT_PROMPTS);
+  const [phdRecords, setPhdRecords] = useState<MedicalRecord[]>([]);
 
-  const [prompts, setPrompts] = useState<Prompt[]>(() => {
-    const stored = localStorage.getItem("prompts");
-    return stored ? JSON.parse(stored) : DEFAULT_PROMPTS;
-  });
+  // Real-time synchronization with Firestore
+  useEffect(() => {
+    // 1. Subscribe to Categories
+    const unsubCats = onSnapshot(collection(db, "categories"), (snapshot) => {
+      if (snapshot.empty) {
+        // Seeding initial categories
+        DEFAULT_CATEGORIES.forEach(async (cat) => {
+          try {
+            await setDoc(doc(db, "categories", cat.id), cat);
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, `categories/${cat.id}`);
+          }
+        });
+      } else {
+        const list: PromptCategory[] = [];
+        snapshot.forEach((doc) => {
+          list.push(doc.data() as PromptCategory);
+        });
+        setCategories(list);
+      }
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, "categories");
+    });
 
-  const [phdRecords, setPhdRecords] = useState<MedicalRecord[]>(() => {
-    const stored = localStorage.getItem("phd_records_v1");
-    return stored ? JSON.parse(stored) : [];
-  });
+    // 2. Subscribe to Prompts
+    const unsubPrompts = onSnapshot(collection(db, "prompts"), (snapshot) => {
+      if (snapshot.empty) {
+        // Seeding initial prompts
+        DEFAULT_PROMPTS.forEach(async (p) => {
+          try {
+            await setDoc(doc(db, "prompts", String(p.id)), p);
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, `prompts/${p.id}`);
+          }
+        });
+      } else {
+        const list: Prompt[] = [];
+        snapshot.forEach((doc) => {
+          list.push(doc.data() as Prompt);
+        });
+        list.sort((a, b) => b.id - a.id);
+        setPrompts(list);
+      }
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, "prompts");
+    });
+
+    // 3. Subscribe to Medical Records
+    const unsubRecords = onSnapshot(collection(db, "phdRecords"), (snapshot) => {
+      if (snapshot.empty) {
+        // Seeding dynamic sample entries
+        PHD_SAMPLES.forEach(async (sample, index) => {
+          const id = Date.now() - (index * 100000);
+          const newRecord: MedicalRecord = {
+            id,
+            name: sample.name,
+            age: sample.age,
+            cat: sample.cat,
+            note: sample.note,
+            symptoms: sample.symptoms,
+            date: new Date(Date.now() - (index * 86400000)).toLocaleDateString("vi-VN")
+          };
+          try {
+            await setDoc(doc(db, "phdRecords", String(id)), newRecord);
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, `phdRecords/${id}`);
+          }
+        });
+      } else {
+        const list: MedicalRecord[] = [];
+        snapshot.forEach((doc) => {
+          list.push(doc.data() as MedicalRecord);
+        });
+        list.sort((a, b) => b.id - a.id);
+        setPhdRecords(list);
+      }
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, "phdRecords");
+    });
+
+    return () => {
+      unsubCats();
+      unsubPrompts();
+      unsubRecords();
+    };
+  }, []);
 
   // Active Main UI Filtering States
   const [activeGenre, setActiveGenre] = useState<string>("all");
@@ -184,19 +269,6 @@ export default function App() {
     }
     localStorage.setItem("darkMode", String(darkMode));
   }, [darkMode]);
-
-  // Sync data arrays to localstorage
-  useEffect(() => {
-    localStorage.setItem("categories", JSON.stringify(categories));
-  }, [categories]);
-
-  useEffect(() => {
-    localStorage.setItem("prompts", JSON.stringify(prompts));
-  }, [prompts]);
-
-  useEffect(() => {
-    localStorage.setItem("phd_records_v1", JSON.stringify(phdRecords));
-  }, [phdRecords]);
 
   // Adjust HTML background variable parameters based on current states
   useEffect(() => {
@@ -427,8 +499,9 @@ export default function App() {
       return;
     }
 
+    const recordId = Date.now();
     const newRecord: MedicalRecord = {
-      id: Date.now(),
+      id: recordId,
       name: phdName.trim() || "Bệnh nhân ẩn danh",
       age: phdAge || "Bí ẩn Không Tiết Lộ",
       cat: phdSelectedCat,
@@ -437,7 +510,9 @@ export default function App() {
       date: new Date().toLocaleDateString("vi-VN")
     };
 
-    setPhdRecords(prev => [newRecord, ...prev]);
+    setDoc(doc(db, "phdRecords", String(recordId)), newRecord)
+      .catch(err => handleFirestoreError(err, OperationType.WRITE, `phdRecords/${recordId}`));
+    
     setPhdSuccessSubmitted(true);
 
     // Reset input fields
@@ -512,27 +587,8 @@ export default function App() {
 
     if (editPromptId !== null) {
       // Edit existing prompt
-      setPrompts(prev => prev.map(p => {
-        if (p.id === editPromptId) {
-          return {
-            ...p,
-            name: formName.trim(),
-            category: formCategory,
-            icon: formIcon.trim() || "🏥",
-            url: formUrl.trim(),
-            description: formDescription.trim(),
-            tags: formTags,
-            hasPassword: formHasPassword,
-            hint: formHasPassword ? formPasswordHint.trim() : null,
-            password: formHasPassword ? formCorrectPassword.trim() : null
-          };
-        }
-        return p;
-      }));
-    } else {
-      // Create new prompt
-      const newPrompt: Prompt = {
-        id: Date.now(),
+      const updatedPrompt: Prompt = {
+        id: editPromptId,
         name: formName.trim(),
         category: formCategory,
         icon: formIcon.trim() || "🏥",
@@ -543,7 +599,25 @@ export default function App() {
         hint: formHasPassword ? formPasswordHint.trim() : null,
         password: formHasPassword ? formCorrectPassword.trim() : null
       };
-      setPrompts(prev => [newPrompt, ...prev]);
+      setDoc(doc(db, "prompts", String(editPromptId)), updatedPrompt)
+        .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${editPromptId}`));
+    } else {
+      // Create new prompt
+      const promptId = Date.now();
+      const newPrompt: Prompt = {
+        id: promptId,
+        name: formName.trim(),
+        category: formCategory,
+        icon: formIcon.trim() || "🏥",
+        url: formUrl.trim(),
+        description: formDescription.trim(),
+        tags: formTags,
+        hasPassword: formHasPassword,
+        hint: formHasPassword ? formPasswordHint.trim() : null,
+        password: formHasPassword ? formCorrectPassword.trim() : null
+      };
+      setDoc(doc(db, "prompts", String(promptId)), newPrompt)
+        .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${promptId}`));
     }
 
     // Reset layout
@@ -580,7 +654,8 @@ export default function App() {
     const directMatch = deletePromptPassword.trim() === "hauyennhi";
 
     if (computedPassHash || directMatch) {
-      setPrompts(prev => prev.filter(p => p.id !== deletePromptId));
+      deleteDoc(doc(db, "prompts", String(deletePromptId)))
+        .catch(err => handleFirestoreError(err, OperationType.DELETE, `prompts/${deletePromptId}`));
       setDeletePromptId(null);
       setDeletePromptPassword("");
       setDeletePromptError("");
@@ -601,23 +676,28 @@ export default function App() {
       icon: newCatIcon.trim() || "📂",
       name: newCatName.trim()
     };
-    setCategories(prev => [...prev, newCat]);
+    setDoc(doc(db, "categories", safeId), newCat)
+      .catch(err => handleFirestoreError(err, OperationType.WRITE, `categories/${safeId}`));
     setNewCatName("");
     setNewCatIcon("🧠");
   };
 
   const handleDeleteCategory = (id: string) => {
     if (confirm("Xóa phòng này sẽ gỡ bỏ phân loại của các bác sĩ. Tiếp tục?")) {
+      deleteDoc(doc(db, "categories", id))
+        .catch(err => handleFirestoreError(err, OperationType.DELETE, `categories/${id}`));
+
       const remainingCats = categories.filter(c => c.id !== id);
       const fallbackCat = remainingCats.length > 0 ? remainingCats[0].id : "";
-      setCategories(remainingCats);
+
       // Re-assign category of prompts belonging to deleted category to first remaining or empty
-      setPrompts(prev => prev.map(p => {
+      prompts.forEach((p) => {
         if (p.category === id) {
-          return { ...p, category: fallbackCat };
+          const updatedPrompt = { ...p, category: fallbackCat };
+          setDoc(doc(db, "prompts", String(p.id)), updatedPrompt)
+            .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${p.id}`));
         }
-        return p;
-      }));
+      });
     }
   };
 
@@ -725,7 +805,8 @@ export default function App() {
 
   // Delete Diagnostic entries
   const deleteRecordItem = (id: number) => {
-    setPhdRecords(prev => prev.filter(r => r.id !== id));
+    deleteDoc(doc(db, "phdRecords", String(id)))
+      .catch(err => handleFirestoreError(err, OperationType.DELETE, `phdRecords/${id}`));
   };
 
   // Filter core prompts shown on the visual matrix

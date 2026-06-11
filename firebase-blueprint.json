@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "category": {
+      "title": "Category",
+      "description": "Custom or default category for grouping prompts",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the category"
+        },
+        "icon": {
+          "type": "string",
+          "description": "Emoji icon representation"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name in Vietnamese"
+        }
+      },
+      "required": ["id", "icon", "name"]
+    },
+    "prompt": {
+      "title": "Prompt",
+      "description": "A doctor, nurse, or medical staff profile with customizable avatar, details, and optional passcode lock",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number",
+          "description": "Numeric or unique ID for the prompt"
+        },
+        "name": {
+          "type": "string",
+          "description": "Profile name"
+        },
+        "category": {
+          "type": "string",
+          "description": "Linked category ID"
+        },
+        "icon": {
+          "type": "string",
+          "description": "Visual character emoji representation"
+        },
+        "url": {
+          "type": "string",
+          "description": "Underlying link or source reference URL"
+        },
+        "description": {
+          "type": "string",
+          "description": "Character profile introduction or system message"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Attributes or characteristics tags"
+        },
+        "hasPassword": {
+          "type": "boolean",
+          "description": "Whether passcode protection is enabled"
+        },
+        "hint": {
+          "type": "string",
+          "description": "Password hint text"
+        },
+        "password": {
+          "type": "string",
+          "description": "Custom password text value"
+        }
+      },
+      "required": ["id", "name", "category", "icon", "url", "description", "tags"]
+    },
+    "medicalRecord": {
+      "title": "Medical Record",
+      "description": "Hospital record or clinical symptom note submitted by a visiting client",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number",
+          "description": "Unique record identifier number"
+        },
+        "name": {
+          "type": "string",
+          "description": "Patient user custom identifier"
+        },
+        "age": {
+          "type": "string",
+          "description": "Target demographic segment name / range"
+        },
+        "cat": {
+          "type": "string",
+          "description": "Primary affected mental or neurological category"
+        },
+        "note": {
+          "type": "string",
+          "description": "Patient description of delusion or symptoms"
+        },
+        "symptoms": {
+          "type": "array",
+          "description": "Collection of checked clinical symptom names"
+        },
+        "date": {
+          "type": "string",
+          "description": "ISO date string representing check-in"
+        }
+      },
+      "required": ["id", "name", "age", "cat", "note", "symptoms", "date"]
+    }
+  },
+  "firestore": {
+    "categories": {
+      "schema": "category",
+      "description": "Collection storing active prompt classification categories"
+    },
+    "prompts": {
+      "schema": "prompt",
+      "description": "Online database of characters, prompts, and profiles"
+    },
+    "phdRecords": {
+      "schema": "medicalRecord",
+      "description": "Online database storing registered medical check-in records"
+    }
+  }
+}
