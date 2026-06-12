@@ -855,12 +855,13 @@ export default function App() {
   // Save Youtube / Custom streaming URL BGM
   const saveExternalMusic = () => {
     if (!musicUrl.trim()) {
-      alert("Hãy nhập URL hoặc link YouTube!");
+      alert("Hãy chọn file nhạc hoặc nhập trực tiếp link YouTube vào ô trống nhé!");
       return;
     }
     localStorage.setItem("musicUrl", musicUrl);
     localStorage.setItem("musicTitle", musicTitle);
     setPlayerPlaying(true);
+    alert("Kích hoạt nhạc nền thành công!");
   };
 
   const clearMusicControl = () => {
@@ -1014,7 +1015,7 @@ export default function App() {
             initial={{ opacity: 0, y: 25 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="flex flex-col items-center text-center max-w-2xl select-none my-auto"
+            className="flex flex-col items-center text-center max-w-full px-4 select-none my-auto"
           >
             {/* Top custom clinical badge icon */}
             <div className="text-6xl mb-6 filter drop-shadow-md animate-bounce duration-[3000ms]">
@@ -1022,7 +1023,7 @@ export default function App() {
             </div>
             
             {/* Title: Serif, italic uppercase with warm colors */}
-            <h1 className="font-serif italic text-3xl sm:text-5xl md:text-6xl font-black uppercase text-[#A55166] dark:text-[#F7DAE7] tracking-wider mb-2">
+            <h1 className="font-serif italic text-[1.4rem] sm:text-3xl md:text-5xl xl:text-6xl font-black uppercase whitespace-nowrap text-[#A55166] dark:text-[#F7DAE7] tracking-wider mb-2">
               VIỆN TÂM THẦN CỐ THỊ
             </h1>
             
@@ -1299,7 +1300,7 @@ export default function App() {
                   type="text"
                   value={mainSearchQuery}
                   onChange={(e) => setMainSearchQuery(e.target.value)}
-                  placeholder="Tìm bệnh án nhân vật..."
+                  placeholder="Tìm bệnh án hoặc triệu chứng nhân vật..."
                   className="flex-1 bg-transparent border-none outline-none font-semibold text-gray-800 dark:text-gray-200 placeholder-rose-300 dark:placeholder-rose-800/80 text-sm py-1.5"
                 />
                 
@@ -1915,7 +1916,7 @@ export default function App() {
                       : "text-gray-400 hover:text-rose-500"
                   }`}
                 >
-                  <span className="relative z-10">📋 Tổng quan BGM Banners</span>
+                  <span className="relative z-10">📋 Cài đặt chung</span>
                   {settingsTab === "general" && (
                     <motion.div
                       layoutId="activeSettingsTabLine"
@@ -1932,7 +1933,7 @@ export default function App() {
                       : "text-gray-400 hover:text-rose-500"
                   }`}
                 >
-                  <span className="relative z-10">📂 Quản lý các phòng khoa</span>
+                  <span className="relative z-10">📂 Quản lý các khoa</span>
                   {settingsTab === "categories" && (
                     <motion.div
                       layoutId="activeSettingsTabLine"
@@ -1974,7 +1975,7 @@ export default function App() {
                     
                     {/* Background images section */}
                     <div>
-                      <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-3">🖼️ Thay hình nền viện tâm thần</span>
+                      <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-3">🖼️ THAY HÌNH NỀN</span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         
                         {/* Welcome wallpaper */}
@@ -2048,17 +2049,17 @@ export default function App() {
 
                     {/* Audio soundtracks setup */}
                     <div>
-                      <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-3">🎵 Cấu Hàng BGM Nhạc Nền</span>
+                      <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-3">🎵 NHẠC NỀN</span>
                       
                       <div className="flex flex-col gap-3 p-4 bg-white dark:bg-black/20 rounded-2xl border border-pink-100 dark:border-pink-900/30">
                         
                         <div className="flex flex-col gap-1.5">
-                          <span className="text-[10px] font-semibold text-gray-400">Link YouTube hoặc direct link ca khúc</span>
+                          <span className="text-[10px] font-semibold text-gray-400">Chèn link YouTube</span>
                           <input
                             type="text"
                             value={musicUrl}
                             onChange={(e) => setMusicUrl(e.target.value)}
-                            placeholder="https://www.youtube.com/watch?v=... hoặc link MP3..."
+                            placeholder="https://www.youtube.com/watch?v=..."
                             className="w-full py-2 px-3 text-xs rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 font-semibold outline-none"
                           />
                         </div>
@@ -2075,12 +2076,12 @@ export default function App() {
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                          <span className="text-[10px] font-semibold text-gray-400">Hoặc tải tập tin nhạc cục bộ (Tối đa 2.5MB)</span>
+                          <span className="text-[10px] font-semibold text-gray-400">Tải file MP3 lên (Tối đa 2.5MB)</span>
                           <input
                             type="file"
                             accept="audio/*"
                             onChange={(e) => handleMusicUploadSubmit(e.target.files ? e.target.files[0] : null)}
-                            className="text-xs text-gray-400"
+                            className="w-full text-xs text-gray-500 dark:text-gray-400 file:cursor-pointer cursor-pointer file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-rose-100 file:text-rose-700 hover:file:bg-rose-200 dark:file:bg-pink-900/40 dark:file:text-pink-300 dark:hover:file:bg-pink-900/60 transition-all"
                           />
                         </div>
 
@@ -2090,7 +2091,7 @@ export default function App() {
                             onClick={saveExternalMusic}
                             className="flex-1 py-2 rounded-lg bg-rose-400 hover:bg-rose-500 text-white font-bold text-xs"
                           >
-                            💾 Kích Hoạt Nhạc BGM
+                            💾 Kích Hoạt
                           </button>
                           <button
                             type="button"
@@ -2118,7 +2119,7 @@ export default function App() {
                     className="flex flex-col gap-5"
                   >
                     <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block">
-                      📂 {editingCatId ? "Cập Nhật Hồ Sơ Khoa Phòng" : "Bố Trí Khoa Phòng Khám Mới"}
+                      📂 {editingCatId ? "Cập Nhật Hồ Sơ Khoa Phòng" : "Bố Trí Phòng Khoa"}
                     </span>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-white dark:bg-black/20 p-4 rounded-2xl border border-pink-100 dark:border-pink-900/50">
