@@ -65,7 +65,7 @@ export default function App() {
 
   // Admin authentication state
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    return localStorage.getItem("isLoggedIn") === "true";
+    return localStorage.getItem("adminAuthToken_v2") === "true";
   });
 
   // Core Data Lists
@@ -227,6 +227,9 @@ export default function App() {
   const [formHasPassword, setFormHasPassword] = useState(false);
   const [formPasswordHint, setFormPasswordHint] = useState("");
   const [formCorrectPassword, setFormCorrectPassword] = useState("");
+
+  // Success toast/message inside Add modal
+  const [formSuccessMessage, setFormSuccessMessage] = useState("");
 
   // Prompt Deletion Confirmation states
   const [deletePromptId, setDeletePromptId] = useState<number | null>(null);
@@ -449,22 +452,67 @@ export default function App() {
     )
   );
 
+  // Compute frequencies to sort/rank "typical" (popular) tags within this category
+  const tagFrequencies: Record<string, number> = {};
+  prompts
+    .filter(p => activeGenre === "all" || p.category === activeGenre)
+    .flatMap(p => p.tags || [])
+    .forEach(tag => {
+      tagFrequencies[tag] = (tagFrequencies[tag] || 0) + 1;
+    });
+
+  // Sort tags by popularity descending
+  const sortedTypicalTags = [...uniqueTags].sort((a: string, b: string) => (tagFrequencies[b] || 0) - (tagFrequencies[a] || 0));
+
+  // Determine tags to present based on user search query
+  const trimmedSearchQuery = mainSearchQuery.trim().toLowerCase();
+  const displayTags = (() => {
+    if (!trimmedSearchQuery) {
+      // Hide most tags: only show the top 10 typical/popular ones that fit dynamically in one row
+      return sortedTypicalTags.slice(0, 10);
+    } else {
+      // User is searching: filter tags to display only those related.
+      // A tag is related if the tag name itself matches the query,
+      // OR if it belongs to any prompt that matches the search query.
+      const matchingPrompts = prompts.filter(p => {
+        const matchesGenre = activeGenre === "all" || p.category === activeGenre;
+        if (!matchesGenre) return false;
+        return (
+          p.name.toLowerCase().includes(trimmedSearchQuery) ||
+          p.description.toLowerCase().includes(trimmedSearchQuery) ||
+          p.tags.some(t => t.toLowerCase().includes(trimmedSearchQuery))
+        );
+      });
+      
+      const tagsFromMatchingPrompts = new Set(
+        matchingPrompts.flatMap(p => p.tags || [])
+      );
+
+      return sortedTypicalTags.filter((tag: string) => {
+        return (
+          tag.toLowerCase().includes(trimmedSearchQuery) ||
+          tagsFromMatchingPrompts.has(tag)
+        );
+      });
+    }
+  })();
+
   // Custom password SHA256 matches & Login procedure
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Expected values: charmainennie8 -> username / hauyennhi -> password
+    // Expected values: charmainennie8 -> username / sotAodat8386. -> password
     const userHash = "37e203816a8cf75effcc83325709640f089e016439c8c290a5f0909ab13b4b28";
-    const passHash = "0542f3f06bedb287833ac48869a9713d7065eb8bb7cbe6b1f4dbb3ee8d1c7b26";
+    const passHash = "af275e14dd782e863faac0e4dee88d7cb4d16c1472a869d6d8793dfe05f20d95";
 
     const computedUserHash = await verifyHash(adminUsername.trim(), userHash);
     const computedPassHash = await verifyHash(adminPassword, passHash);
 
     // Alternative: direct string fallback to make testing friendly for local environment
-    const directMatch = adminUsername.trim() === "charmainennie8" && adminPassword === "hauyennhi";
+    const directMatch = adminUsername.trim() === "charmainennie8" && adminPassword === "sotAodat8386.";
 
     if ((computedUserHash && computedPassHash) || directMatch) {
       setIsLoggedIn(true);
-      localStorage.setItem("isLoggedIn", "true");
+      localStorage.setItem("adminAuthToken_v2", "true");
       setLoginOpen(false);
       setAdminUsername("");
       setAdminPassword("");
@@ -479,7 +527,7 @@ export default function App() {
 
   const handleAdminLogout = () => {
     setIsLoggedIn(false);
-    localStorage.removeItem("isLoggedIn");
+    localStorage.removeItem("adminAuthToken_v2");
   };
 
   // Preset diagnostic template selectors (Assessment Registration)
@@ -559,6 +607,7 @@ export default function App() {
     setFormHasPassword(false);
     setFormPasswordHint("");
     setFormCorrectPassword("");
+    setFormSuccessMessage("");
     setAddPromptOpen(true);
   };
 
@@ -574,6 +623,7 @@ export default function App() {
     setFormHasPassword(!!prompt.hasPassword);
     setFormPasswordHint(prompt.hint || "");
     setFormCorrectPassword(prompt.password || "");
+    setFormSuccessMessage("");
     setAddPromptOpen(true);
   };
 
@@ -621,10 +671,29 @@ export default function App() {
       };
       setDoc(doc(db, "prompts", String(promptId)), newPrompt)
         .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${promptId}`));
+      
+      // Keep open and reset form inputs (retaining active category for easy subsequent adds)
+      setFormName("");
+      setFormIcon("");
+      setFormUrl("");
+      setFormDescription("");
+      setFormTags([]);
+      setFormTagsInput("");
+      setFormHasPassword(false);
+      setFormPasswordHint("");
+      setFormCorrectPassword("");
+      
+      // Display success message
+      setFormSuccessMessage("Đăng tải bệnh án mới thành công! Bạn có thể tiếp tục thêm bệnh án khác.");
+      setTimeout(() => {
+        setFormSuccessMessage("");
+      }, 5000);
     }
 
-    // Reset layout
-    setAddPromptOpen(false);
+    // Only close if it was an EDIT, for ADD we keep it open so they can add more!
+    if (editPromptId !== null) {
+      setAddPromptOpen(false);
+    }
   };
 
   // Add individual tag from form text box input
@@ -652,9 +721,9 @@ export default function App() {
 
   const handleConfirmDelete = async () => {
     if (deletePromptId === null) return;
-    const passHash = "0542f3f06bedb287833ac48869a9713d7065eb8bb7cbe6b1f4dbb3ee8d1c7b26";
+    const passHash = "af275e14dd782e863faac0e4dee88d7cb4d16c1472a869d6d8793dfe05f20d95";
     const computedPassHash = await verifyHash(deletePromptPassword.trim(), passHash);
-    const directMatch = deletePromptPassword.trim() === "hauyennhi";
+    const directMatch = deletePromptPassword.trim() === "sotAodat8386.";
 
     if (computedPassHash || directMatch) {
       deleteDoc(doc(db, "prompts", String(deletePromptId)))
@@ -1262,7 +1331,7 @@ export default function App() {
                   Tất cả triệu chứng
                 </button>
 
-                {uniqueTags.map(tag => {
+                {displayTags.map(tag => {
                   const isSelected = selectedTag === tag;
                   return (
                     <button
@@ -1279,7 +1348,7 @@ export default function App() {
                   );
                 })}
 
-                {uniqueTags.length === 0 && (
+                {displayTags.length === 0 && (
                   <span className="text-xs italic text-gray-400">Không có thẻ triệu chứng nào tương thích</span>
                 )}
               </div>
@@ -1631,6 +1700,12 @@ export default function App() {
 
               <form onSubmit={handlePromptSubmit} className="flex flex-col gap-4">
                 
+                {formSuccessMessage && (
+                  <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 p-3 rounded-xl border border-emerald-200 dark:border-emerald-900 transition-all animate-bounce">
+                    🎉 {formSuccessMessage}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide">
