@@ -17,7 +17,9 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     url: "https://civitai.com",
     description: "Trưởng khoa tâm thần học lâm sàng. Chuyên khám chữa các triệu chứng mê đắm thể nặng, hoang tưởng đa vũ trụ chatbot và ảo giác ngọt ngào cấp độ cao.",
     tags: ["Đẹp trai", "Nghiêm khắc", "Cưng chiều"],
-    hasPassword: false
+    hasPassword: false,
+    votes: 185,
+    khoa: "Tâm thần"
   },
   {
     id: 2,
@@ -27,7 +29,9 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     url: "https://huggingface.co",
     description: "Nữ điều dưỡng trưởng dịu dàng, chu đáo chuyên lập hồ sơ theo dõi triệu chứng co giật cơ tim nhẹ khi gặp soái ca ảo tưởng.",
     tags: ["Dịu dàng", "Tận tâm", "Ngọt ngào"],
-    hasPassword: false
+    hasPassword: false,
+    votes: 120,
+    khoa: "Thần kinh"
   },
   {
     id: 3,
@@ -39,7 +43,9 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     tags: ["Khóa mật khẩu", "Bí ẩn", "Hắc bang"],
     hasPassword: true,
     hint: "Tên tài khoản admin viết liền, không dấu (charmainennie8)",
-    password: "charmainennie8"
+    password: "charmainennie8",
+    votes: 95,
+    khoa: "Tâm thần"
   },
   {
     id: 4,
@@ -49,7 +55,9 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     url: "https://wikipedia.org",
     description: "Chuyên khoa điều trị mệt mỏi trái tim khi cày đỏ mắt chờ chương truyện mới của nam chính tổng tài.",
     tags: ["Tim đập nhanh", "Ngược luyến", "Chữa lành"],
-    hasPassword: false
+    hasPassword: false,
+    votes: 150,
+    khoa: "Tim mạch"
   }
 ];
 

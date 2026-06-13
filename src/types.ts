@@ -21,6 +21,8 @@ export interface Prompt {
   hasPassword?: boolean;
   hint?: string | null;
   password?: string | null;
+  votes?: number;
+  khoa?: string;
 }
 
 export interface MedicalRecord {

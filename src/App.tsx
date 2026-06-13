@@ -41,7 +41,8 @@ import {
   Sun,
   Eye,
   EyeOff,
-  RefreshCw
+  RefreshCw,
+  Heart
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -265,6 +266,124 @@ export default function App() {
   // Expanded records state
   const [expandedRecordIds, setExpandedRecordIds] = useState<Record<number, boolean>>({});
   const [randomRoll, setRandomRoll] = useState<Prompt | null>(null);
+
+  // --- Vote State & Logic for Doctors/Characters ---
+  const [toasts, setToasts] = useState<{ id: number; message: string; type: "success" | "warning" }[]>([]);
+
+  const addToast = (message: string, type: "success" | "warning" = "success") => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, message, type }]);
+    
+    // Auto remove after 4.5 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4500);
+  };
+
+  const [votesData, setVotesData] = useState<Record<string, number>>(() => {
+    try {
+      // Prioritize the requested 'char_votes' key, fallback to legacy 'hospital_votes' if exists
+      const saved = localStorage.getItem("char_votes") || localStorage.getItem("hospital_votes");
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn("Could not parse votes from localStorage", e);
+    }
+    const initial: Record<string, number> = {};
+    DEFAULT_PROMPTS.forEach(p => {
+      initial[String(p.id)] = p.votes || 0;
+    });
+    return initial;
+  });
+
+  const [votedDates, setVotedDates] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem("char_voted_dates");
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn("Could not parse voted dates from localStorage", e);
+    }
+    return {};
+  });
+
+  // Ensure newly arrived prompts have at least a default vote value or 0
+  useEffect(() => {
+    setVotesData(prev => {
+      let changed = false;
+      const updated = { ...prev };
+      prompts.forEach(p => {
+        if (updated[String(p.id)] === undefined) {
+          updated[String(p.id)] = p.votes || 0;
+          changed = true;
+        }
+      });
+      if (changed) {
+        localStorage.setItem("char_votes", JSON.stringify(updated));
+        return updated;
+      }
+      return prev;
+    });
+  }, [prompts]);
+
+  const [floatingHearts, setFloatingHearts] = useState<{ id: number; x: number; y: number; label?: string }[]>([]);
+
+  const handleVote = (characterId: string) => {
+    const today = new Date().toLocaleDateString("sv"); // 'sv' outputs format 'YYYY-MM-DD'
+    const char = prompts.find(p => String(p.id) === characterId);
+    const charName = char ? char.name : "Nhân vật";
+
+    // Rate-limiting check: 1 vote per character per day
+    if (votedDates[characterId] === today) {
+      addToast(`💖 Hôm nay bé đã thả tim cho "${charName}" rồi!`, "warning");
+      return;
+    }
+
+    // 1. Update votesData State and localStorage
+    setVotesData(prev => {
+      const updated = {
+        ...prev,
+        [characterId]: (prev[characterId] || 0) + 1
+      };
+      localStorage.setItem("char_votes", JSON.stringify(updated));
+      return updated;
+    });
+
+    // 2. Update votedDates State and localStorage
+    setVotedDates(prev => {
+      const updated = {
+        ...prev,
+        [characterId]: today
+      };
+      localStorage.setItem("char_voted_dates", JSON.stringify(updated));
+      return updated;
+    });
+
+    // 3. Inform user of success & trigger immediate celebrate-confetti event
+    addToast(`🎉 Đã bình chọn thành công cho "${charName}"!`, "success");
+    window.dispatchEvent(new CustomEvent("celebrate-confetti"));
+
+    // Spawn lovely floating romantic hearts
+    const hearts = ["💖", "💗", "💝", "🌸", "💓", "❤️", "💕", "💘"];
+    const chosenHeart = hearts[Math.floor(Math.random() * hearts.length)];
+    
+    for (let i = 0; i < 5; i++) {
+      const newHeart = {
+        id: Date.now() + Math.random() + i,
+        x: 10 + Math.random() * 80, // percentage offset
+        y: 80 + Math.random() * 15, // y offset
+        label: i === 0 ? "💖" : chosenHeart
+      };
+      setFloatingHearts(prev => [...prev, newHeart]);
+      
+      // Cleanup after flight time
+      setTimeout(() => {
+        setFloatingHearts(prev => prev.filter(h => h.id !== newHeart.id));
+      }, 1800);
+    }
+  };
 
   // Auth Hashing credential inputs
   const [adminUsername, setAdminUsername] = useState("");
@@ -951,6 +1070,41 @@ export default function App() {
     return matchesSearch && matchesGenre && matchesSelectedTag;
   });
 
+  // Compute leading character for Honor Banner (character with maximum votes)
+  const leadingCharacter = (() => {
+    if (prompts.length === 0) return null;
+    let bestPrompt: Prompt | null = prompts[0];
+    let maxVotes = -1;
+    
+    prompts.forEach(p => {
+      const votes = votesData[String(p.id)] ?? p.votes ?? 0;
+      if (votes > maxVotes) {
+        maxVotes = votes;
+        bestPrompt = p;
+      }
+    });
+    
+    return bestPrompt;
+  })();
+
+  const getBannerRoleTitle = (character: Prompt | null) => {
+    if (!character) return "🩺 TOP GƯƠNG MẶT ĐƯỢC YÊU THÍCH NHẤT";
+    const name = character.name;
+    if (name.includes("Giáo sư") || name.includes("Bác sĩ")) {
+      return "🩺 TOP BÁC SĨ ĐƯỢC YÊU THÍCH NHẤT";
+    }
+    return "🩺 TOP ĐIỀU DƯỠNG ĐƯỢC YÊU THÍCH NHẤT";
+  };
+
+  const getBannerCtaLabel = (character: Prompt | null) => {
+    if (!character) return 'Bình chọn "Điều Dưỡng Yêu Thích" tại đây 👇';
+    const name = character.name;
+    if (name.includes("Giáo sư") || name.includes("Bác sĩ")) {
+      return 'Bình chọn "Bác Sĩ Yêu Thích" tại đây 👇';
+    }
+    return 'Bình chọn "Điều Dưỡng Yêu Thích" tại đây 👇';
+  };
+
   return (
     <div className={`relative min-h-screen font-sans antialiased text-gray-800 dark:text-gray-100 ${darkMode ? "dark" : ""}`}>
       
@@ -1175,6 +1329,89 @@ export default function App() {
               </button>
             </div>
           </header>
+
+          {/* HONOR BENTO BANNER - TOP RECOGNIZED CHARACTER */}
+          {leadingCharacter && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4 }}
+              className="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-r from-[#9E182B] via-[#630D1B] to-[#200407] border-2 border-[#F2AFBC]/45 shadow-2xl shadow-[#9E182B]/10 mb-8 flex flex-col md:flex-row items-center justify-between gap-6"
+            >
+              {/* Background ambient lighting effects inside banner */}
+              <div className="absolute top-0 right-0 w-64 h-64 bg-[#F2AFBC]/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-10 left-10 w-48 h-48 bg-[#9E182B]/15 rounded-full blur-2xl pointer-events-none" />
+              
+              <div className="relative z-10 flex flex-col md:flex-row items-center gap-5 text-center md:text-left">
+                {/* Highlighted dynamic icon/profile ring */}
+                <motion.div 
+                  className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-tr from-[#FEDB41] via-[#F2AFBC] to-[#9E182B] p-1 rounded-full shadow-lg flex items-center justify-center relative"
+                  animate={{ rotate: [0, 4, -4, 0] }}
+                  transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
+                >
+                  <div className="w-full h-full bg-[#200407] rounded-full flex items-center justify-center text-3xl sm:text-4xl select-none">
+                    {leadingCharacter.icon || "🩺"}
+                  </div>
+                  {/* Gold Crown */}
+                  <span className="absolute -top-3.5 -right-1 text-2xl filter drop-shadow">👑</span>
+                </motion.div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="inline-block text-[11px] sm:text-xs font-black text-[#FEDB41] tracking-widest uppercase bg-[#FEDB41]/10 px-3 py-1 rounded-full border border-[#FEDB41]/20 w-fit mx-auto md:mx-0 select-none shadow-sm">
+                    {getBannerRoleTitle(leadingCharacter)}
+                  </span>
+                  
+                  <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight drop-shadow-sm mt-1">
+                    {leadingCharacter.name}
+                  </h2>
+                  
+                  <p className="text-xs sm:text-sm text-[#F2E0D2] font-semibold tracking-wide flex items-center gap-1 opacity-90 justify-center md:justify-start">
+                    <span>{categories.find(c => c.id === leadingCharacter.category)?.name || "Khoa Trị Liệu"}</span>
+                    <span className="opacity-40">|</span>
+                    <span>Tích lũy</span>
+                    <span className="text-[#F9CBD6] font-extrabold font-mono text-sm sm:text-base underline decoration-dotted decoration-[#F2AFBC]">
+                      {(votesData[String(leadingCharacter.id)] ?? leadingCharacter.votes ?? 0)}
+                    </span>
+                    <span>phiếu yêu thích</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Interactive CTA side */}
+              <div className="relative z-10 flex flex-col items-center md:items-end gap-2.5 min-w-[200px]">
+                <span className="text-xs text-[#F2AFBC] font-bold tracking-wide text-center md:text-right select-none opacity-95">
+                  {getBannerCtaLabel(leadingCharacter)}
+                </span>
+                
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleVote(String(leadingCharacter.id))}
+                  className="px-5 py-3 rounded-2xl bg-gradient-to-r from-[#9E182B] to-[#7A0D1D] border-2 border-[#F2AFBC] text-[#F2E0D2] text-xs font-black hover:border-[#F9CBD6] hover:shadow-lg hover:shadow-[#F2AFBC]/20 transition-all duration-300 cursor-pointer flex items-center gap-2"
+                >
+                  <span>💼</span> Bấm vào để VOTE cho {leadingCharacter.name.includes(" ") ? leadingCharacter.name.split(" ").slice(-2).join(" ") : leadingCharacter.name}
+                </motion.button>
+              </div>
+
+              {/* Romantic animated hearts renderer within the banner element */}
+              <AnimatePresence>
+                {floatingHearts.map(heart => (
+                  <motion.span
+                    key={heart.id}
+                    initial={{ y: 50, x: `${heart.x}%`, opacity: 1, scale: 0.8 }}
+                    animate={{ y: -190, opacity: 0, scale: 1.6, rotate: [0, 15, -15, 0] }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 1.6, ease: "easeOut" }}
+                    className="absolute text-xl pointer-events-none select-none z-30 opacity-95"
+                    style={{ bottom: "10px" }}
+                  >
+                    {heart.label}
+                  </motion.span>
+                ))}
+              </AnimatePresence>
+            </motion.div>
+          )}
 
           {/* SƠ ĐỒ PHÒNG BỆNH (Nằm ngang toàn màn hình ngay dưới banner web) */}
           <div className="bg-white/75 dark:bg-[#1E2533]/85 backdrop-blur-md rounded-2xl p-5 border-2 border-pink-100 dark:border-pink-950/40 shadow-lg flex flex-col gap-4 mb-8 select-none">
@@ -1466,16 +1703,50 @@ export default function App() {
                         </p>
                       </div>
 
-                      {/* Tag badges cloud footer */}
-                      <div className="flex flex-wrap gap-1.5 pt-3 border-t border-gray-100 dark:border-gray-800 mt-2">
-                        {p.tags.map(t => (
-                          <span 
-                            key={t}
-                            className="text-[9px] font-bold bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-md"
-                          >
-                            #{t}
-                          </span>
-                        ))}
+                      {/* Tag badges cloud & Elegant Rose Quartz/Blush Vote Box footer */}
+                      <div className="flex items-center justify-between gap-4 mt-4 pt-3 border-t border-gray-100 dark:border-gray-850">
+                        {/* Tag badges cloud left aligned */}
+                        <div className="flex flex-wrap gap-1.5 flex-1 max-w-[70%]">
+                          {p.tags.map(t => (
+                            <span 
+                              key={t}
+                              className="text-[9px] font-bold bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-md"
+                            >
+                              #{t}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Elegant Rose Quartz/Blush Vote Box */}
+                        {(() => {
+                          const today = new Date().toLocaleDateString("sv");
+                          const hasVotedToday = votedDates[String(p.id)] === today;
+                          return (
+                            <motion.button
+                              type="button"
+                              id={`vote-btn-${p.id}`}
+                              whileHover={{ scale: 1.08 }}
+                              whileTap={{ scale: 0.85 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                handleVote(String(p.id));
+                              }}
+                              className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-gradient-to-br from-[#9E182B] to-[#510A14] border border-[#F2AFBC]/50 hover:border-[#F9CBD6] shadow-xl text-center transition-all cursor-pointer min-w-[88px] z-10"
+                            >
+                              <span className="text-[11px] font-black uppercase text-[#F9CBD6] tracking-wider select-none mb-1.5 drop-shadow-sm">
+                                {votesData[String(p.id)] ?? p.votes ?? 0} PHIẾU
+                              </span>
+                              <Heart 
+                                className={`h-6 w-6 transition-all duration-200 hover:scale-115 ${
+                                  hasVotedToday 
+                                    ? "stroke-[#F2E0D2] fill-[#F2AFBC] drop-shadow-sm" 
+                                    : "stroke-[#F2E0D2] fill-transparent hover:fill-[#F2AFBC] hover:stroke-[#9E182B]"
+                                }`} 
+                              />
+                            </motion.button>
+                          );
+                        })()}
                       </div>
 
                     </div>
@@ -3033,6 +3304,30 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Dynamic Toast Notifications */}
+      <div className="fixed top-6 right-6 left-6 sm:left-auto z-[999999] flex flex-col gap-3 max-w-md pointer-events-none">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, y: -20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, y: -10 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className={`p-4 rounded-2xl shadow-xl flex items-center gap-3 border pointer-events-auto backdrop-blur-md ${
+                toast.type === "success" 
+                  ? "bg-gradient-to-r from-[#260C35] via-[#190924] to-[#1E0A14] border-[#a55166] text-white" 
+                  : "bg-gradient-to-r from-[#FBF6F9] to-[#F7DAE7] border-[#E2B4C1] text-[#A55166] dark:from-[#211A1D] dark:to-[#1a0a10] dark:border-pink-900/60 dark:text-pink-300"
+              }`}
+            >
+              <p className="text-xs font-bold leading-relaxed tracking-wide">
+                {toast.message}
+              </p>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
       
       <ConfettiEffect active={phdConfettiActive} onComplete={() => setPhdConfettiActive(false)} />
 

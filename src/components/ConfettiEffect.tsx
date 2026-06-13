@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface ConfettiEffectProps {
-  active: boolean;
+  active?: boolean;
   onComplete?: () => void;
 }
 
@@ -32,18 +32,16 @@ const COLORS = [
 
 export const ConfettiEffect: React.FC<ConfettiEffectProps> = ({ active, onComplete }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [hasActiveParticles, setHasActiveParticles] = useState(false);
+  const particlesRef = useRef<Particle[]>([]);
+  const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!active) return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
-    let animationFrameId: number;
-    let particles: Particle[] = [];
 
     // Set canvas dimensions
     const resizeCanvas = () => {
@@ -53,11 +51,11 @@ export const ConfettiEffect: React.FC<ConfettiEffectProps> = ({ active, onComple
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
 
-    // Initial bursts
+    // Create a particle
     const createParticle = (x: number, y: number, angle: number, speedMultiplier = 1): Particle => {
       const angleRad = (angle * Math.PI) / 180;
       const speed = (Math.random() * 8 + 6) * speedMultiplier;
-      const size = Math.random() * 6 + 4; // Not too big, elegant
+      const size = Math.random() * 6 + 4;
       const shapes: Particle["shape"][] = ["circle", "square", "triangle", "heart", "sparkle"];
       const shape = shapes[Math.floor(Math.random() * shapes.length)];
       
@@ -68,7 +66,7 @@ export const ConfettiEffect: React.FC<ConfettiEffectProps> = ({ active, onComple
         color: COLORS[Math.floor(Math.random() * COLORS.length)],
         shape,
         vx: Math.cos(angleRad) * speed + (Math.random() - 0.5) * 2,
-        vy: Math.sin(angleRad) * speed - (Math.random() * 4 + 2), // upward bias
+        vy: Math.sin(angleRad) * speed - (Math.random() * 4 + 2),
         rotation: Math.random() * 360,
         rotationSpeed: (Math.random() - 0.5) * 8,
         opacity: 1,
@@ -76,123 +74,147 @@ export const ConfettiEffect: React.FC<ConfettiEffectProps> = ({ active, onComple
       };
     };
 
-    // Spawn 140 particles from dual sources: bottom-left and bottom-right corners
+    // Spawn dual fountain particles
     const spawnExplosion = () => {
       const width = window.innerWidth;
       const height = window.innerHeight;
+      const newParticles: Particle[] = [];
 
       // Fountain from bottom-left
-      for (let i = 0; i < 65; i++) {
-        // angle: -65 to -25 degrees
+      for (let i = 0; i < 75; i++) {
         const angle = -65 + Math.random() * 40;
-        particles.push(createParticle(0, height - 20, angle, 1.4));
+        newParticles.push(createParticle(0, height - 20, angle, 1.5));
       }
 
       // Fountain from bottom-right
-      for (let i = 0; i < 65; i++) {
-        // angle: -155 to -115 degrees
+      for (let i = 0; i < 75; i++) {
         const angle = -155 + Math.random() * 40;
-        particles.push(createParticle(width, height - 20, angle, 1.4));
+        newParticles.push(createParticle(width, height - 20, angle, 1.5));
       }
 
-      // Quick central ring burst for extra depth
-      for (let i = 0; i < 30; i++) {
+      // Quick central ring burst
+      for (let i = 0; i < 35; i++) {
         const angle = Math.random() * 360;
-        particles.push(createParticle(width / 2, height / 2, angle, 0.8));
+        newParticles.push(createParticle(width / 2, height / 2, angle, 0.9));
+      }
+
+      particlesRef.current = [...particlesRef.current, ...newParticles];
+      setHasActiveParticles(true);
+
+      // Start animation loop if not already running
+      if (!animationFrameRef.current) {
+        animate();
       }
     };
 
-    spawnExplosion();
-
     // Game loop
     const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const currentCanvas = canvasRef.current;
+      if (!currentCanvas) return;
+      const currentCtx = currentCanvas.getContext("2d");
+      if (!currentCtx) return;
 
-      particles.forEach((p, idx) => {
-        // Physics update
+      currentCtx.clearRect(0, 0, currentCanvas.width, currentCanvas.height);
+
+      let activeParticles = particlesRef.current;
+
+      activeParticles.forEach((p) => {
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.22; // gravity - realistic speed
-        p.vx *= 0.985; // drag/air resistance
+        p.vy += 0.22; // gravity
+        p.vx *= 0.985; // air resistance
         p.vy *= 0.985;
         p.rotation += p.rotationSpeed;
         p.opacity -= p.fadeSpeed;
 
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate((p.rotation * Math.PI) / 180);
-        ctx.globalAlpha = Math.max(0, p.opacity);
-        ctx.fillStyle = p.color;
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = 1;
+        currentCtx.save();
+        currentCtx.translate(p.x, p.y);
+        currentCtx.rotate((p.rotation * Math.PI) / 180);
+        currentCtx.globalAlpha = Math.max(0, p.opacity);
+        currentCtx.fillStyle = p.color;
+        currentCtx.strokeStyle = p.color;
+        currentCtx.lineWidth = 1;
 
-        // Draw shape
         if (p.shape === "circle") {
-          ctx.beginPath();
-          ctx.arc(0, 0, p.size, 0, Math.PI * 2);
-          ctx.fill();
+          currentCtx.beginPath();
+          currentCtx.arc(0, 0, p.size, 0, Math.PI * 2);
+          currentCtx.fill();
         } else if (p.shape === "square") {
-          ctx.fillRect(-p.size, -p.size, p.size * 2, p.size * 2);
+          currentCtx.fillRect(-p.size, -p.size, p.size * 2, p.size * 2);
         } else if (p.shape === "triangle") {
-          ctx.beginPath();
-          ctx.moveTo(0, -p.size);
-          ctx.lineTo(p.size, p.size);
-          ctx.lineTo(-p.size, p.size);
-          ctx.closePath();
-          ctx.fill();
+          currentCtx.beginPath();
+          currentCtx.moveTo(0, -p.size);
+          currentCtx.lineTo(p.size, p.size);
+          currentCtx.lineTo(-p.size, p.size);
+          currentCtx.closePath();
+          currentCtx.fill();
         } else if (p.shape === "heart") {
-          // Beautiful heart shape
-          ctx.beginPath();
+          currentCtx.beginPath();
           const d = p.size * 1.1;
-          ctx.moveTo(0, d / 4);
-          ctx.bezierCurveTo(-d / 2, -d / 2, -d, -d / 4, -d, d / 4);
-          ctx.bezierCurveTo(-d, d * 0.7, 0, d * 1.25, 0, d * 1.25);
-          ctx.bezierCurveTo(0, d * 1.25, d, d * 0.7, d, d * 0.4);
-          ctx.bezierCurveTo(d, -d / 4, d / 2, -d / 2, 0, d / 4);
-          ctx.closePath();
-          ctx.fill();
+          currentCtx.moveTo(0, d / 4);
+          currentCtx.bezierCurveTo(-d / 2, -d / 2, -d, -d / 4, -d, d / 4);
+          currentCtx.bezierCurveTo(-d, d * 0.7, 0, d * 1.25, 0, d * 1.25);
+          currentCtx.bezierCurveTo(0, d * 1.25, d, d * 0.7, d, d * 0.4);
+          currentCtx.bezierCurveTo(d, -d / 4, d / 2, -d / 2, 0, d / 4);
+          currentCtx.closePath();
+          currentCtx.fill();
         } else if (p.shape === "sparkle") {
-          // Shiny star sparkle
-          ctx.beginPath();
+          currentCtx.beginPath();
           const s = p.size * 1.3;
-          ctx.moveTo(0, -s);
-          ctx.quadraticCurveTo(0, 0, s, 0);
-          ctx.quadraticCurveTo(0, 0, 0, s);
-          ctx.quadraticCurveTo(0, 0, -s, 0);
-          ctx.quadraticCurveTo(0, 0, 0, -s);
-          ctx.closePath();
-          ctx.fill();
+          currentCtx.moveTo(0, -s);
+          currentCtx.quadraticCurveTo(0, 0, s, 0);
+          currentCtx.quadraticCurveTo(0, 0, 0, s);
+          currentCtx.quadraticCurveTo(0, 0, -s, 0);
+          currentCtx.quadraticCurveTo(0, 0, 0, -s);
+          currentCtx.closePath();
+          currentCtx.fill();
         }
 
-        ctx.restore();
+        currentCtx.restore();
       });
 
-      // Filter out faded/out-of-bound particles
-      particles = particles.filter(p => p.opacity > 0 && p.y < canvas.height + 50);
+      // Filter
+      particlesRef.current = activeParticles.filter(
+        p => p.opacity > 0 && p.y < currentCanvas.height + 50
+      );
 
-      if (particles.length > 0) {
-        animationFrameId = requestAnimationFrame(animate);
+      if (particlesRef.current.length > 0) {
+        animationFrameRef.current = requestAnimationFrame(animate);
       } else {
+        setHasActiveParticles(false);
+        animationFrameRef.current = null;
         if (onComplete) onComplete();
       }
     };
 
-    animationFrameId = requestAnimationFrame(animate);
+    // Listen to custom celebrate-confetti window event for instant execution
+    const handleCelebrateEvent = () => {
+      spawnExplosion();
+    };
 
-    // Cleanup
+    window.addEventListener("celebrate-confetti", handleCelebrateEvent);
+
+    // Also listen to the active prop if provided for backwards compatibility
+    if (active) {
+      spawnExplosion();
+    }
+
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
       window.removeEventListener("resize", resizeCanvas);
+      window.removeEventListener("celebrate-confetti", handleCelebrateEvent);
     };
   }, [active, onComplete]);
-
-  if (!active) return null;
 
   return (
     <canvas
       ref={canvasRef}
       id="confetti-canvas"
-      className="fixed inset-0 w-full h-full pointer-events-none z-[99999]"
+      className={`fixed inset-0 w-full h-full pointer-events-none z-[99999] transition-opacity duration-300 ${
+        hasActiveParticles ? "opacity-100" : "opacity-0"
+      }`}
     />
   );
 };
