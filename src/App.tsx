@@ -56,6 +56,273 @@ import {
 import { db, handleFirestoreError, OperationType } from "./firebase";
 import { ConfettiEffect } from "./components/ConfettiEffect";
 
+interface PromptCardProps {
+  key?: React.Key;
+  p: Prompt;
+  categories: PromptCategory[];
+  votesData: Record<string, number>;
+  votedDates: Record<string, string>;
+  isLoggedIn: boolean;
+  onVote: (id: string) => void;
+  onEdit: (p: Prompt) => void;
+  onDelete: (id: number) => void;
+  onPasswordFail: (showTroll: boolean, gifUrl?: string, soundUrl?: string) => void;
+}
+
+export function PromptCard({
+  p,
+  categories,
+  votesData,
+  votedDates,
+  isLoggedIn,
+  onVote,
+  onEdit,
+  onDelete,
+  onPasswordFail
+}: PromptCardProps) {
+  const [localFailCount, setLocalFailCount] = useState(0);
+  const [showLocalUnlock, setShowLocalUnlock] = useState(false);
+  const [enteredUnlockPass, setEnteredUnlockPass] = useState("");
+  const [unlockError, setUnlockError] = useState(false);
+
+  const parentCat = categories.find(c => c.id === p.category);
+  const isLocked = !!p.hasPassword;
+
+  const handleCardClick = () => {
+    if (isLocked) {
+      setShowLocalUnlock(true);
+      setEnteredUnlockPass("");
+      setUnlockError(false);
+    } else {
+      window.open(p.url, "_blank", "noreferrer");
+    }
+  };
+
+  const verifyPromptUnlock = () => {
+    const realPass = (p.password || "").trim().toLowerCase();
+    const enteredPass = enteredUnlockPass.trim().toLowerCase();
+    
+    if (enteredPass === realPass || enteredPass === "charmainennie8") {
+      setUnlockError(false);
+      window.open(p.url, "_blank", "noreferrer");
+      setShowLocalUnlock(false);
+      setEnteredUnlockPass("");
+      setLocalFailCount(0);
+    } else {
+      setUnlockError(true);
+      const newCount = localFailCount + 1;
+      const limit = p.passwordFailLimit || 5;
+      
+      if (newCount >= limit) {
+        // Trigger the parent's troll overlay!
+        setLocalFailCount(0);
+        setUnlockError(false);
+        setEnteredUnlockPass("");
+        setShowLocalUnlock(false);
+        onPasswordFail(true, p.passwordFailGifUrl || "", p.passwordFailSoundUrl || "");
+      } else {
+        setLocalFailCount(newCount);
+      }
+    }
+  };
+
+  return (
+    <>
+      <div
+        id={`prompt-card-${p.id}`}
+        onClick={handleCardClick}
+        className="group relative overflow-hidden bg-white dark:bg-[#1E2533] rounded-2xl p-5 border-2 border-pink-100 dark:border-pink-950/40 shadow-md hover:shadow-xl hover:border-pink-300 dark:hover:border-rose-900 transition-all duration-300 transform hover:-translate-y-1.5 cursor-pointer flex flex-col justify-between"
+      >
+        
+        {/* Active edit/delete controls for logged admins */}
+        {isLoggedIn && (
+          <div className="absolute top-4 right-4 z-20 flex gap-1 bg-white/90 dark:bg-gray-900/90 rounded-xl p-1 border border-pink-100 dark:border-pink-950 shadow-sm">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(p);
+              }}
+              className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-transform hover:scale-110"
+              title="Sửa"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(p.id);
+              }}
+              className="p-1.5 text-red-500 hover:bg-red-100 rounded-lg transition-transform hover:scale-110"
+              title="Xóa"
+            >
+              🗑️
+            </button>
+          </div>
+        )}
+
+        {/* Top Header Card row */}
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-3.5">
+            {parentCat && (
+              <span className="text-[10px] font-extrabold uppercase tracking-wide bg-rose-50 dark:bg-pink-950/50 text-rose-800 dark:text-rose-300 px-2.5 py-1 rounded-full border border-pink-100/50 dark:border-pink-900/30">
+                {parentCat.icon} {parentCat.name}
+              </span>
+            )}
+            
+            {/* Locked indicators */}
+            {isLocked && (
+              <span className="text-amber-500 bg-amber-50 dark:bg-amber-950/50 p-1.5 rounded-full border border-amber-200/50 dark:border-amber-900 text-[10px]" title="Có mật khẩu bảo mật">
+                <Lock size={12} className="inline mr-1" /> Mật Lệnh
+              </span>
+            )}
+          </div>
+
+          {/* Title & Description */}
+          <h3 className="font-sans font-extrabold text-lg text-rose-800 dark:text-rose-300 flex items-center gap-2 mb-2 group-hover:text-rose-600 dark:group-hover:text-rose-200 transition-colors">
+            <span className="text-xl bg-pink-100 dark:bg-pink-950 p-1 md:p-1.5 rounded-xl">{p.icon || "🧬"}</span>
+            <span className="truncate max-w-[200px] inline-block">{p.name}</span>
+          </h3>
+
+          <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-4 line-clamp-3 font-medium">
+            {p.description}
+          </p>
+        </div>
+
+        {/* Tag badges cloud & Elegant Rose Quartz/Blush Vote Box footer */}
+        <div className="flex items-center justify-between gap-4 mt-4 pt-3 border-t border-gray-100 dark:border-gray-850">
+          {/* Tag badges cloud left aligned */}
+          <div className="flex flex-wrap gap-1.5 flex-1 max-w-[70%]">
+            {p.tags.map(t => (
+              <span 
+                key={t}
+                className="text-[9px] font-bold bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-md"
+              >
+                #{t}
+              </span>
+            ))}
+          </div>
+
+          {/* Elegant Rose Quartz/Blush Vote Box (VoteHeartWidget) */}
+          {(() => {
+            const today = new Date().toLocaleDateString("sv");
+            const hasVotedToday = votedDates[String(p.id)] === today;
+            return (
+              <motion.button
+                type="button"
+                id={`vote-btn-${p.id}`}
+                whileHover={{ scale: 1.15 }}
+                whileTap={{ scale: 0.85 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onVote(String(p.id));
+                }}
+                className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-gradient-to-br from-[#9E182B] to-[#510A14] border border-[#F2AFBC]/50 hover:border-[#F9CBD6] shadow-xl text-center transition-all cursor-pointer min-w-[88px] z-10"
+              >
+                <span className="text-[11px] font-black uppercase text-[#F9CBD6] tracking-wider select-none mb-1.5 drop-shadow-sm">
+                  {votesData[String(p.id)] ?? p.votes ?? 0} PHIẾU
+                </span>
+                <Heart 
+                  className={`h-6 w-6 transition-all duration-200 ${
+                    hasVotedToday 
+                      ? "stroke-[#F2E0D2] fill-[#F2AFBC] drop-shadow-sm scale-110" 
+                      : "stroke-[#F2E0D2] fill-transparent hover:fill-[#F2AFBC] hover:stroke-[#9E182B]"
+                  }`} 
+                />
+              </motion.button>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* Local Card Password Unlock Modal */}
+      <AnimatePresence>
+        {showLocalUnlock && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gradient-to-br from-[#FBF6F9] to-[#EFE2EB] dark:from-[#211A1D] dark:to-[#171113] p-6 rounded-3xl border-2 border-pink-200 dark:border-pink-900 w-full max-w-sm shadow-2xl relative text-left"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-sm font-extrabold text-rose-800 dark:text-rose-300 flex items-center gap-1.5 font-serif italic">
+                  🔒 Bác sĩ can thiệp đặc thù
+                </span>
+                <button 
+                  onClick={() => setShowLocalUnlock(false)}
+                  className="p-1 rounded-full bg-rose-100 hover:bg-rose-200 dark:bg-rose-950 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              <div className="text-center mb-5 font-sans">
+                <div className="text-4xl mb-2 text-rose-700 dark:text-rose-300">{p.icon}</div>
+                <h4 className="font-bold text-gray-800 dark:text-gray-100 text-base">{p.name}</h4>
+                <p className="text-xs text-gray-400 mt-1">Hồ sơ tư vấn này đã được quản trị khóa mã lệnh y tế.</p>
+              </div>
+
+              {p.hint && (
+                <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-900/50 text-xs text-rose-900 dark:text-rose-200 leading-relaxed font-sans">
+                  💡 <strong className="font-bold">Gợi ý trả lời:</strong> <span className="italic">{p.hint}</span>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5 mb-4 font-sans">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-widest leading-none">
+                    Nhập Mật Lệnh Giải Trừ Hoang Tưởng: <span className="text-red-500">*</span>
+                  </span>
+                  {localFailCount > 0 && (
+                    <span className="text-[10px] font-bold text-red-550 bg-red-50 dark:bg-red-950/30 text-rose-600 px-1.5 py-0.5 rounded border border-rose-100 dark:border-rose-900/40 font-mono animate-pulse">
+                      Sai: {localFailCount}/{p.passwordFailLimit || 5}
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="password"
+                  value={enteredUnlockPass}
+                  onChange={(e) => setEnteredUnlockPass(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      verifyPromptUnlock();
+                    }
+                  }}
+                  placeholder="Nhập mật khóa..."
+                  className="w-full py-2.5 px-3.5 rounded-xl border-2 border-pink-100 dark:border-pink-900 bg-white dark:bg-black/30 font-semibold text-sm outline-none focus:border-rose-400 text-gray-800 dark:text-gray-100"
+                />
+
+                {unlockError && (
+                  <span className="text-xs font-bold text-red-500 mt-1">
+                    ❌ Mật lệnh chẩn thuật không khớp, vui lòng thử lại!
+                  </span>
+                )}
+              </div>
+
+              <div className="flex gap-3 font-sans">
+                <button
+                  onClick={verifyPromptUnlock}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose-400 to-pink-500 text-white font-extrabold text-xs transition-all shadow-md shadow-pink-500/20 hover:scale-105 cursor-pointer"
+                >
+                  🔓 Mở khóa hồ sơ
+                </button>
+                <button
+                  onClick={() => setShowLocalUnlock(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold text-xs"
+                >
+                  Đóng
+                </button>
+              </div>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 export default function App() {
   // Screens & Navigation
   const [screen, setScreen] = useState<"welcome" | "app">("welcome");
@@ -75,6 +342,31 @@ export default function App() {
   const [prompts, setPrompts] = useState<Prompt[]>(DEFAULT_PROMPTS);
   const [phdRecords, setPhdRecords] = useState<MedicalRecord[]>([]);
 
+  // Centralized Troll Overlay states
+  const [trollActive, setTrollActive] = useState(false);
+  const [trollGifUrl, setTrollGifUrl] = useState("");
+  const [trollSoundUrl, setTrollSoundUrl] = useState("");
+  const [trollTimeLeft, setTrollTimeLeft] = useState(10);
+
+  // Countdown timer for Troll Overlay lockout
+  useEffect(() => {
+    if (!trollActive) {
+      setTrollTimeLeft(10);
+      return;
+    }
+    setTrollTimeLeft(10);
+    const interval = setInterval(() => {
+      setTrollTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [trollActive]);
+
   // Dynamic favicon setup to ensure robust delivery and prevent browser caching issues
   useEffect(() => {
     const link = (document.querySelector("link[rel*='icon']") || document.createElement('link')) as HTMLLinkElement;
@@ -83,6 +375,72 @@ export default function App() {
     link.href = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏥</text></svg>';
     document.getElementsByTagName('head')[0].appendChild(link);
   }, []);
+
+  // Continuous "Wee-Woo" siren alarm / audio trigger connected to trollActive state
+  useEffect(() => {
+    if (!trollActive) return;
+
+    const src = trollSoundUrl || "https://assets.mixkit.co/active_storage/sfx/951/951-84.wav";
+    let audio: HTMLAudioElement | null = null;
+    let synthInterval: any = null;
+    let audioCtx: AudioContext | null = null;
+
+    try {
+      audio = new Audio(src);
+      audio.volume = 0.55;
+      audio.loop = true;
+      audio.play().catch(err => {
+        console.warn("Autoplay block or audio warning fallback, starting synth oscillator", err);
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass) {
+            audioCtx = new AudioContextClass();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(500, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            osc.start();
+
+            let toggleFreq = true;
+            synthInterval = setInterval(() => {
+              if (audioCtx && osc) {
+                osc.frequency.setValueAtTime(toggleFreq ? 880 : 440, audioCtx.currentTime);
+                toggleFreq = !toggleFreq;
+              }
+            }, 450);
+          }
+        } catch (synthError) {
+          console.error("Synthesizer setup failed:", synthError);
+        }
+      });
+    } catch (err) {
+      console.error("Error launching client alarms:", err);
+    }
+
+    return () => {
+      if (audio) {
+        try {
+          audio.pause();
+          audio.src = "";
+        } catch (e) {
+          console.warn("Clean up audio session", e);
+        }
+      }
+      if (synthInterval) {
+        clearInterval(synthInterval);
+      }
+      if (audioCtx) {
+        try {
+          audioCtx.close();
+        } catch (e) {
+          console.warn("Clean up sound thread", e);
+        }
+      }
+    };
+  }, [trollActive, trollSoundUrl]);
 
   // Real-time synchronization with Firestore
   useEffect(() => {
@@ -238,6 +596,9 @@ export default function App() {
   const [formHasPassword, setFormHasPassword] = useState(false);
   const [formPasswordHint, setFormPasswordHint] = useState("");
   const [formCorrectPassword, setFormCorrectPassword] = useState("");
+  const [formPasswordFailLimit, setFormPasswordFailLimit] = useState<number>(5);
+  const [formPasswordFailGifUrl, setFormPasswordFailGifUrl] = useState<string>("");
+  const [formPasswordFailSoundUrl, setFormPasswordFailSoundUrl] = useState<string>("");
 
   // Success toast/message inside Add modal
   const [formSuccessMessage, setFormSuccessMessage] = useState("");
@@ -725,6 +1086,12 @@ export default function App() {
     setScreen("app");
   };
 
+  const handlePasswordFail = (showTroll: boolean, gifUrl?: string, soundUrl?: string) => {
+    setTrollGifUrl(gifUrl || "");
+    setTrollSoundUrl(soundUrl || "");
+    setTrollActive(showTroll);
+  };
+
   // Prompt configuration modifications: Create or Edit Card values
   const triggerAddPrompt = () => {
     setEditPromptId(null);
@@ -738,6 +1105,9 @@ export default function App() {
     setFormHasPassword(false);
     setFormPasswordHint("");
     setFormCorrectPassword("");
+    setFormPasswordFailLimit(5);
+    setFormPasswordFailGifUrl("");
+    setFormPasswordFailSoundUrl("");
     setFormSuccessMessage("");
     setAddPromptOpen(true);
   };
@@ -754,6 +1124,9 @@ export default function App() {
     setFormHasPassword(!!prompt.hasPassword);
     setFormPasswordHint(prompt.hint || "");
     setFormCorrectPassword(prompt.password || "");
+    setFormPasswordFailLimit(prompt.passwordFailLimit || 5);
+    setFormPasswordFailGifUrl(prompt.passwordFailGifUrl || "");
+    setFormPasswordFailSoundUrl(prompt.passwordFailSoundUrl || "");
     setFormSuccessMessage("");
     setAddPromptOpen(true);
   };
@@ -781,7 +1154,10 @@ export default function App() {
         tags: formTags,
         hasPassword: formHasPassword,
         hint: formHasPassword ? formPasswordHint.trim() : null,
-        password: formHasPassword ? formCorrectPassword.trim() : null
+        password: formHasPassword ? formCorrectPassword.trim() : null,
+        passwordFailLimit: formHasPassword ? formPasswordFailLimit : 5,
+        passwordFailGifUrl: formHasPassword ? formPasswordFailGifUrl.trim() : "",
+        passwordFailSoundUrl: formHasPassword ? formPasswordFailSoundUrl.trim() : ""
       };
       setDoc(doc(db, "prompts", String(editPromptId)), updatedPrompt)
         .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${editPromptId}`));
@@ -798,7 +1174,10 @@ export default function App() {
         tags: formTags,
         hasPassword: formHasPassword,
         hint: formHasPassword ? formPasswordHint.trim() : null,
-        password: formHasPassword ? formCorrectPassword.trim() : null
+        password: formHasPassword ? formCorrectPassword.trim() : null,
+        passwordFailLimit: formHasPassword ? formPasswordFailLimit : 5,
+        passwordFailGifUrl: formHasPassword ? formPasswordFailGifUrl.trim() : "",
+        passwordFailSoundUrl: formHasPassword ? formPasswordFailSoundUrl.trim() : ""
       };
       setDoc(doc(db, "prompts", String(promptId)), newPrompt)
         .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${promptId}`));
@@ -813,6 +1192,9 @@ export default function App() {
       setFormHasPassword(false);
       setFormPasswordHint("");
       setFormCorrectPassword("");
+      setFormPasswordFailLimit(5);
+      setFormPasswordFailGifUrl("");
+      setFormPasswordFailSoundUrl("");
       
       // Display success message
       setFormSuccessMessage("Đăng tải bệnh án mới thành công! Bạn có thể tiếp tục thêm bệnh án khác.");
@@ -841,6 +1223,38 @@ export default function App() {
 
   const removeFormTag = (tagText: string) => {
     setFormTags(prev => prev.filter(t => t !== tagText));
+  };
+
+  const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Dung lượng tệp media không được vượt quá 2MB!");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setFormPasswordFailGifUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSoundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Dung lượng tệp âm thanh không được vượt quá 2MB!");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setFormPasswordFailSoundUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // Delete Prompt
@@ -1638,120 +2052,20 @@ export default function App() {
               {/* MEDICAL INTERACTIVE CARD GRID */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 
-                {filteredPrompts.map(p => {
-                  const parentCat = categories.find(c => c.id === p.category);
-                  const isLocked = !!p.hasPassword;
-                  
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => handleCardClick(p)}
-                      className="group relative overflow-hidden bg-white dark:bg-[#1E2533] rounded-2xl p-5 border-2 border-pink-100 dark:border-pink-950/40 shadow-md hover:shadow-xl hover:border-pink-300 dark:hover:border-rose-900 transition-all duration-300 transform hover:-translate-y-1.5 cursor-pointer flex flex-col justify-between"
-                    >
-                      
-                      {/* Active edit/delete controls for logged admins */}
-                      {isLoggedIn && (
-                        <div className="absolute top-4 right-4 z-20 flex gap-1 bg-white/90 dark:bg-gray-900/90 rounded-xl p-1 border border-pink-100 dark:border-pink-950 shadow-sm">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              triggerEditPrompt(p);
-                            }}
-                            className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-transform hover:scale-110"
-                            title="Sửa"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deletePrompt(p.id);
-                            }}
-                            className="p-1.5 text-red-500 hover:bg-red-100 rounded-lg transition-transform hover:scale-110"
-                            title="Xóa"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Top Header Card row */}
-                      <div>
-                        <div className="flex items-center justify-between gap-2 mb-3.5">
-                          {parentCat && (
-                            <span className="text-[10px] font-extrabold uppercase tracking-wide bg-rose-50 dark:bg-pink-950/50 text-rose-800 dark:text-rose-300 px-2.5 py-1 rounded-full border border-pink-100/50 dark:border-pink-900/30">
-                              {parentCat.icon} {parentCat.name}
-                            </span>
-                          )}
-                          
-                          {/* Locked indicators */}
-                          {isLocked && (
-                            <span className="text-amber-500 bg-amber-50 dark:bg-amber-950/50 p-1.5 rounded-full border border-amber-200/50 dark:border-amber-900 text-[10px]" title="Có mật khẩu bảo mật">
-                              <Lock size={12} className="inline mr-1" /> Mật Lệnh
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Title & Description */}
-                        <h3 className="font-sans font-extrabold text-lg text-rose-800 dark:text-rose-300 flex items-center gap-2 mb-2 group-hover:text-rose-600 dark:group-hover:text-rose-200 transition-colors">
-                          <span className="text-xl bg-pink-100 dark:bg-pink-950 p-1 md:p-1.5 rounded-xl">{p.icon || "🧬"}</span>
-                          <span>{p.name}</span>
-                        </h3>
-
-                        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-4 line-clamp-3">
-                          {p.description}
-                        </p>
-                      </div>
-
-                      {/* Tag badges cloud & Elegant Rose Quartz/Blush Vote Box footer */}
-                      <div className="flex items-center justify-between gap-4 mt-4 pt-3 border-t border-gray-100 dark:border-gray-850">
-                        {/* Tag badges cloud left aligned */}
-                        <div className="flex flex-wrap gap-1.5 flex-1 max-w-[70%]">
-                          {p.tags.map(t => (
-                            <span 
-                              key={t}
-                              className="text-[9px] font-bold bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-md"
-                            >
-                              #{t}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Elegant Rose Quartz/Blush Vote Box */}
-                        {(() => {
-                          const today = new Date().toLocaleDateString("sv");
-                          const hasVotedToday = votedDates[String(p.id)] === today;
-                          return (
-                            <motion.button
-                              type="button"
-                              id={`vote-btn-${p.id}`}
-                              whileHover={{ scale: 1.08 }}
-                              whileTap={{ scale: 0.85 }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                handleVote(String(p.id));
-                              }}
-                              className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-gradient-to-br from-[#9E182B] to-[#510A14] border border-[#F2AFBC]/50 hover:border-[#F9CBD6] shadow-xl text-center transition-all cursor-pointer min-w-[88px] z-10"
-                            >
-                              <span className="text-[11px] font-black uppercase text-[#F9CBD6] tracking-wider select-none mb-1.5 drop-shadow-sm">
-                                {votesData[String(p.id)] ?? p.votes ?? 0} PHIẾU
-                              </span>
-                              <Heart 
-                                className={`h-6 w-6 transition-all duration-200 hover:scale-115 ${
-                                  hasVotedToday 
-                                    ? "stroke-[#F2E0D2] fill-[#F2AFBC] drop-shadow-sm" 
-                                    : "stroke-[#F2E0D2] fill-transparent hover:fill-[#F2AFBC] hover:stroke-[#9E182B]"
-                                }`} 
-                              />
-                            </motion.button>
-                          );
-                        })()}
-                      </div>
-
-                    </div>
-                  );
-                })}
+                {filteredPrompts.map(p => (
+                  <PromptCard
+                    key={p.id}
+                    p={p}
+                    categories={categories}
+                    votesData={votesData}
+                    votedDates={votedDates}
+                    isLoggedIn={isLoggedIn}
+                    onVote={handleVote}
+                    onEdit={triggerEditPrompt}
+                    onDelete={deletePrompt}
+                    onPasswordFail={handlePasswordFail}
+                  />
+                ))}
 
                 {filteredPrompts.length === 0 && (
                   <div className="col-span-full py-16 text-center text-gray-400">
@@ -2117,27 +2431,101 @@ export default function App() {
                   </label>
 
                   {formHasPassword && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2.5">
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-[10px] font-bold text-gray-500">Mật mã mở khóa <span className="text-red-500">*</span></span>
-                        <input
-                          type="text"
-                          required={formHasPassword}
-                          value={formCorrectPassword}
-                          onChange={(e) => setFormCorrectPassword(e.target.value)}
-                          placeholder="Mật mã giải cứu..."
-                          className="py-1.5 px-3 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 text-xs font-semibold outline-none"
-                        />
+                    <div className="flex flex-col gap-3 mt-2.5 pt-2.5 border-t border-pink-100 dark:border-pink-900/40">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-bold text-gray-500">Mật mã mở khóa <span className="text-red-500">*</span></span>
+                          <input
+                            type="text"
+                            required={formHasPassword}
+                            value={formCorrectPassword}
+                            onChange={(e) => setFormCorrectPassword(e.target.value)}
+                            placeholder="Mật mã giải cứu..."
+                            className="py-1.5 px-3 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 text-xs font-semibold outline-none"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-bold text-gray-500">Gợi ý câu hỏi (Hint)</span>
+                          <input
+                            type="text"
+                            value={formPasswordHint}
+                            onChange={(e) => setFormPasswordHint(e.target.value)}
+                            placeholder="Gợi ý câu trả lời..."
+                            className="py-1.5 px-3 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 text-xs font-semibold outline-none"
+                          />
+                        </div>
                       </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="flex flex-col gap-1.5 sm:col-span-1">
+                          <span className="text-[10px] font-bold text-gray-500">Số lần nhập sai khóa tối đa <span className="text-red-500">*</span></span>
+                          <input
+                            type="number"
+                            min={1}
+                            required={formHasPassword}
+                            value={formPasswordFailLimit}
+                            onChange={(e) => setFormPasswordFailLimit(Math.max(1, Number(e.target.value) || 5))}
+                            className="py-1.5 px-3 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 text-xs font-semibold outline-none"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5 sm:col-span-2">
+                          <span className="text-[10px] font-bold text-gray-500">Phát còi hú / Âm thanh Troll</span>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              value={formPasswordFailSoundUrl.startsWith("data:") ? "✔️ [Tệp âm thanh cục bộ]" : formPasswordFailSoundUrl}
+                              disabled={formPasswordFailSoundUrl.startsWith("data:")}
+                              onChange={(e) => setFormPasswordFailSoundUrl(e.target.value)}
+                              placeholder="Nhập URL âm thanh (.mp3, .wav)..."
+                              className="flex-1 py-1.5 px-3 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 text-[11px] font-semibold outline-none"
+                            />
+                            <label className="shrink-0 px-2.5 py-1.5 rounded-lg bg-pink-100 hover:bg-pink-200 dark:bg-pink-950 dark:hover:bg-pink-900 text-pink-700 dark:text-pink-300 text-[10px] font-black cursor-pointer flex items-center justify-center border border-pink-200 dark:border-pink-900 shadow-sm">
+                              Tải âm thanh
+                              <input
+                                type="file"
+                                accept="audio/*"
+                                onChange={handleSoundUpload}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+                          {formPasswordFailSoundUrl.startsWith("data:") && (
+                            <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded border border-emerald-100 dark:border-emerald-900/30 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                              <span>Tệp âm thanh đã tải lên và chuyển đổi</span>
+                              <button type="button" onClick={() => setFormPasswordFailSoundUrl("")} className="text-red-500 hover:underline">Xóa</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       <div className="flex flex-col gap-1.5">
-                        <span className="text-[10px] font-bold text-gray-500">Gợi ý câu hỏi (Hint)</span>
-                        <input
-                          type="text"
-                          value={formPasswordHint}
-                          onChange={(e) => setFormPasswordHint(e.target.value)}
-                          placeholder="Gợi ý câu trả lời..."
-                          className="py-1.5 px-3 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 text-xs font-semibold outline-none"
-                        />
+                        <span className="text-[10px] font-bold text-gray-500">Ảnh Troll / GIF / Video cảnh báo</span>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            value={formPasswordFailGifUrl.startsWith("data:") ? "✔️ [Tệp media cục bộ]" : formPasswordFailGifUrl}
+                            disabled={formPasswordFailGifUrl.startsWith("data:")}
+                            onChange={(e) => setFormPasswordFailGifUrl(e.target.value)}
+                            placeholder="Nhập URL hình ảnh/GIF hoặc video..."
+                            className="flex-1 py-1.5 px-3 rounded-lg border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 text-[11px] font-semibold outline-none"
+                          />
+                          <label className="shrink-0 px-2.5 py-1.5 rounded-lg bg-pink-100 hover:bg-pink-200 dark:bg-pink-950 dark:hover:bg-pink-900 text-pink-700 dark:text-pink-300 text-[10px] font-black cursor-pointer flex items-center justify-center border border-pink-200 dark:border-pink-900 shadow-sm">
+                            Tải tệp lên
+                            <input
+                              type="file"
+                              accept="image/*,video/*"
+                              onChange={handleMediaUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                        {formPasswordFailGifUrl.startsWith("data:") && (
+                          <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded border border-emerald-100 dark:border-emerald-900/30 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                            <span>Tệp media đã tải lên và chuyển đổi</span>
+                            <button type="button" onClick={() => setFormPasswordFailGifUrl("")} className="text-red-500 hover:underline">Xóa</button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -2559,78 +2947,110 @@ export default function App() {
       </AnimatePresence>
 
       {/* ========================================== */}
-      {/* MODAL: PROMPT CARD PASSWORD UNLOCK         */}
+      {/* MODAL: CENTRALIZED TROLL WARNING OVERLAY     */}
       {/* ========================================== */}
       <AnimatePresence>
-        {unlockTargetPrompt && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
+        {trollActive && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[200000] flex items-center justify-center p-4">
             <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-gradient-to-br from-[#FBF6F9] to-[#EFE2EB] dark:from-[#211A1D] dark:to-[#171113] p-6 rounded-3xl border-2 border-pink-200 dark:border-pink-900 w-full max-w-sm shadow-2xl"
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="bg-gradient-to-br from-[#2E0B11] to-[#140205] p-6 rounded-3xl border-2 border-[#9E182B] w-full max-w-lg shadow-2xl relative text-center overflow-hidden flex flex-col gap-4 text-white"
             >
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-sm font-extrabold text-rose-800 dark:text-rose-300 flex items-center gap-1.5 font-serif italic">
-                  🔒 Bác sĩ can thiệp đặc thù
-                </span>
+              {/* Close "x" button at the absolute top-right position - revealed only after timer reaches 0 */}
+              {trollTimeLeft === 0 && (
                 <button 
-                  onClick={() => setUnlockTargetPrompt(null)}
-                  className="p-1 rounded-full bg-rose-100 hover:bg-rose-200 dark:bg-rose-950 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300"
+                  onClick={() => setTrollActive(false)}
+                  className="absolute top-4 right-4 p-2 rounded-full bg-red-950/80 hover:bg-red-900 border border-red-800/40 text-red-105 hover:text-red-300 transition-colors z-50 cursor-pointer text-lg font-bold w-8 h-8 flex items-center justify-center animate-bounce"
+                  aria-label="Tắt cảnh báo khẩn cấp"
                 >
-                  <X size={15} />
+                  &times;
                 </button>
-              </div>
-
-              <div className="text-center mb-5">
-                <div className="text-4xl mb-2 text-rose-700 dark:text-rose-300">{unlockTargetPrompt.icon}</div>
-                <h4 className="font-bold text-gray-800 dark:text-gray-100 text-base">{unlockTargetPrompt.name}</h4>
-                <p className="text-xs text-gray-400 mt-1">Hồ sơ tư vấn này đã được quản trị khóa mã lệnh y tế.</p>
-              </div>
-
-              {unlockTargetPrompt.hint && (
-                <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-900/50 text-xs text-rose-900 dark:text-rose-200 leading-relaxed font-sans">
-                  💡 <strong className="font-bold">Gợi ý trả lời:</strong> <span className="italic">{unlockTargetPrompt.hint}</span>
-                </div>
               )}
 
-              <div className="flex flex-col gap-1.5 mb-4">
-                <span className="text-[10px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-widest">
-                  Nhập Mật Lệnh Giải Trừ Hoang Tưởng: <span className="text-red-500">*</span>
-                </span>
-                <input
-                  type="password"
-                  value={enteredUnlockPass}
-                  onChange={(e) => setEnteredUnlockPass(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      verifyPromptUnlock();
-                    }
-                  }}
-                  placeholder="Nhập mật khóa..."
-                  className="w-full py-2.5 px-3.5 rounded-xl border-2 border-pink-100 dark:border-pink-900 bg-white dark:bg-black/30 font-semibold text-sm outline-none focus:border-rose-400"
-                />
-
-                {unlockError && (
-                  <span className="text-xs font-bold text-red-500 mt-1">
-                    ❌ Mật lệnh chẩn thuật không khớp, vui lòng thử lại!
-                  </span>
-                )}
+              <div className="flex flex-col items-center gap-1.5 pt-2">
+                <span className="text-3xl animate-bounce">🚨</span>
+                <h4 className="font-sans font-black uppercase text-[#F9CBD6] tracking-widest text-lg sm:text-xl">
+                  CẢNH BÁO XÂM NHẬP HỒ SƠ Y TẾ
+                </h4>
+                <p className="text-[11px] text-gray-300 font-medium">
+                  Bạn đã vi phạm giới hạn mật mã an toàn cực đặc thù của Viện tâm thần Cố Thị!
+                </p>
               </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={verifyPromptUnlock}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose-400 to-pink-500 text-white font-extrabold text-xs transition-all shadow-md shadow-pink-500/20 hover:scale-105 cursor-pointer"
-                >
-                  🔓 Mở khóa hồ sơ
-                </button>
-                <button
-                  onClick={() => setUnlockTargetPrompt(null)}
-                  className="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold text-xs"
-                >
-                  Đóng
-                </button>
+              {/* Responsive Media Checker */}
+              <div className="relative rounded-2xl overflow-hidden border border-[#9E182B]/40 shadow-inner bg-black flex items-center justify-center min-h-[220px]">
+                {(() => {
+                  const mediaUrl = trollGifUrl;
+                  const isVideo = mediaUrl.startsWith("data:video/") || /\.(mp4|webm|mov|ogg)($|\?)/i.test(mediaUrl);
+                  
+                  if (isVideo) {
+                    return (
+                      <video
+                        src={mediaUrl || "https://assets.mixkit.co/preview/mixkit-fireworks-display-in-the-sky-40439-large.mp4"}
+                        autoPlay
+                        loop
+                        playsInline
+                        ref={(el) => {
+                          if (el) el.volume = 0.55;
+                        }}
+                        className="w-full max-h-[50vh] object-contain rounded-xl"
+                      />
+                    );
+                  } else {
+                    return (
+                      <img
+                        src={mediaUrl || "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbzh0bWV3M29wZHBqdXIzYXZub2R5NW1nY2QzbTcxY3BocmZkYm13eCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/HteV6h0MDqV3y/giphy.gif"}
+                        alt="Hospital Troll Warning"
+                        className="w-full max-h-[50vh] object-contain rounded-xl"
+                        referrerPolicy="no-referrer"
+                      />
+                    );
+                  }
+                })()}
+              </div>
+
+              {/* Action lock prompt and reassurance */}
+              <div className="text-center px-2 py-1 max-w-sm mx-auto w-full">
+                <p className="text-xs text-rose-300/90 font-serif italic mb-4 leading-relaxed bg-[#510A14]/30 px-3 py-2 rounded-xl border border-[#9E182B]/20">
+                  "Tiếng còi báo động đã réo rắt báo cáo cho bệnh viện trưởng. Mọi mưu đồ vượt ngục giả định đều bị dẹp tan!"
+                </p>
+
+                {trollTimeLeft > 0 ? (
+                  <div className="flex flex-col gap-2.5 bg-black/40 p-4 rounded-2xl border border-[#9E182B]/20 w-full">
+                    <div className="flex justify-between items-center text-xs font-bold text-rose-300 font-sans">
+                      <span className="flex items-center gap-1.5 animate-pulse text-[10px] tracking-wider">
+                        🔒 ĐANG CƯỠNG CHẾ CÁCH LY...
+                      </span>
+                      <span className="font-mono bg-[#510A14] border border-[#9E182B]/30 px-2.5 py-0.5 rounded text-[#F9CBD6]">
+                        {trollTimeLeft}s
+                      </span>
+                    </div>
+                    {/* The glowing progress bar */}
+                    <div className="h-3.5 w-full bg-red-950/60 rounded-full overflow-hidden border border-red-900/40 p-[2px]">
+                      <motion.div
+                        className="h-full bg-gradient-to-r from-rose-500 via-[#9E182B] to-red-650 rounded-full"
+                        initial={{ width: "100%" }}
+                        animate={{ width: "0%" }}
+                        transition={{ duration: 10, ease: "linear" }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-gray-400 font-bold tracking-wide uppercase font-sans">
+                      Khóa đóng 'X' sẽ xuất hiện khi thanh tiến trình kết thúc
+                    </span>
+                  </div>
+                ) : (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    onClick={() => setTrollActive(false)}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-br from-[#9E182B] via-[#BD1D33] to-[#510A14] text-white hover:text-[#F2E0D2] font-black uppercase text-xs tracking-widest transition-all shadow-lg hover:shadow-red-900/40 active:scale-95 flex items-center justify-center gap-2 cursor-pointer border border-[#F2AFBC]/35 hover:scale-[1.02]"
+                  >
+                    🤝 Tôi hứa sẽ chữa bệnh ngoan ngoãn!
+                  </motion.button>
+                )}
               </div>
 
             </motion.div>

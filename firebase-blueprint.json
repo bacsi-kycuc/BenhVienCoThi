@@ -72,6 +72,18 @@
         "password": {
           "type": "string",
           "description": "Custom password text value"
+        },
+        "passwordFailLimit": {
+          "type": "number",
+          "description": "Max allowable password failed attempts before the central troll overlay gets triggered"
+        },
+        "passwordFailGifUrl": {
+          "type": "string",
+          "description": "Custom link or Base64 data URI of a troll media image, GIF, or video"
+        },
+        "passwordFailSoundUrl": {
+          "type": "string",
+          "description": "Custom link or Base64 data URI of a siren/alarm sound warning"
         }
       },
       "required": ["id", "name", "category", "icon", "url", "description", "tags"]

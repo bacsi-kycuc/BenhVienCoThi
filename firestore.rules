@@ -30,7 +30,10 @@ service cloud.firestore {
         && data.icon is string && data.icon.size() <= 100
         && data.url is string && data.url.size() <= 1500
         && data.description is string && data.description.size() <= 10000
-        && data.tags is list;
+        && data.tags is list
+        && (!data.keys().contains('passwordFailLimit') || data.passwordFailLimit is number)
+        && (!data.keys().contains('passwordFailGifUrl') || (data.passwordFailGifUrl is string && data.passwordFailGifUrl.size() <= 3000000))
+        && (!data.keys().contains('passwordFailSoundUrl') || (data.passwordFailSoundUrl is string && data.passwordFailSoundUrl.size() <= 3000000));
     }
 
     // MedicalRecord schema validation helper

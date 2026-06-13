@@ -23,6 +23,9 @@ export interface Prompt {
   password?: string | null;
   votes?: number;
   khoa?: string;
+  passwordFailLimit?: number;
+  passwordFailGifUrl?: string;
+  passwordFailSoundUrl?: string;
 }
 
 export interface MedicalRecord {
