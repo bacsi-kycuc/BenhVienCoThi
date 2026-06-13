@@ -74,6 +74,15 @@ export default function App() {
   const [prompts, setPrompts] = useState<Prompt[]>(DEFAULT_PROMPTS);
   const [phdRecords, setPhdRecords] = useState<MedicalRecord[]>([]);
 
+  // Dynamic favicon setup to ensure robust delivery and prevent browser caching issues
+  useEffect(() => {
+    const link = (document.querySelector("link[rel*='icon']") || document.createElement('link')) as HTMLLinkElement;
+    link.type = 'image/svg+xml';
+    link.rel = 'shortcut icon';
+    link.href = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏥</text></svg>';
+    document.getElementsByTagName('head')[0].appendChild(link);
+  }, []);
+
   // Real-time synchronization with Firestore
   useEffect(() => {
     // 1. Subscribe to Categories
