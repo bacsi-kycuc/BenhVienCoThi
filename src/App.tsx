@@ -53,6 +53,7 @@ import {
   deleteDoc 
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
+import { ConfettiEffect } from "./components/ConfettiEffect";
 
 export default function App() {
   // Screens & Navigation
@@ -250,6 +251,7 @@ export default function App() {
   const [phdSymptoms, setPhdSymptoms] = useState<string[]>([]);
   const [phdNote, setPhdNote] = useState("");
   const [phdSuccessSubmitted, setPhdSuccessSubmitted] = useState(false);
+  const [phdConfettiActive, setPhdConfettiActive] = useState(false);
 
   // Expanded records state
   const [expandedRecordIds, setExpandedRecordIds] = useState<Record<number, boolean>>({});
@@ -565,6 +567,7 @@ export default function App() {
       .catch(err => handleFirestoreError(err, OperationType.WRITE, `phdRecords/${recordId}`));
     
     setPhdSuccessSubmitted(true);
+    setPhdConfettiActive(true);
 
     // Reset input fields
     setPhdName("");
@@ -3021,6 +3024,8 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+      
+      <ConfettiEffect active={phdConfettiActive} onComplete={() => setPhdConfettiActive(false)} />
 
     </div>
   );
