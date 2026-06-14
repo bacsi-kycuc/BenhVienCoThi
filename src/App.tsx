@@ -131,8 +131,10 @@ export function PromptCard({
       <div
         id={`prompt-card-${p.id}`}
         onClick={handleCardClick}
-        className="group relative overflow-hidden bg-white dark:bg-[#1E2533] rounded-2xl p-5 border-2 border-pink-100 dark:border-pink-950/40 shadow-md hover:shadow-xl hover:border-pink-300 dark:hover:border-rose-900 transition-all duration-300 transform hover:-translate-y-1.5 cursor-pointer flex flex-col justify-between"
+        className="group relative overflow-hidden bg-white dark:bg-[#1E2533] rounded-2xl p-5 border-2 border-pink-100 dark:border-pink-950/40 shadow-md hover:shadow-xl hover:border-pink-300 dark:hover:border-rose-900 transition-all duration-300 transform hover:-translate-y-1.5 cursor-pointer flex flex-col justify-between paper-noise prompt-card-depth-3d"
       >
+        {/* Dynamic backdrop glowing layer responsive to scaling and changing opacity on hover */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-pink-150/0 via-transparent to-pink-200/10 dark:to-rose-800/15 opacity-40 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500 rounded-2xl pointer-events-none z-0" />
         
         {/* Active edit/delete controls for logged admins */}
         {isLoggedIn && (
@@ -1522,7 +1524,7 @@ export default function App() {
   return (
     <div className={`relative min-h-screen font-sans antialiased text-gray-800 dark:text-gray-100 ${darkMode ? "dark" : ""}`}>
       
-      {/* BACKGROUND ELEMENTS */}
+      {/* BACKGROUND ELEMENTS & LAYERS */}
       <div 
         className="fixed inset-0 pointer-events-none z-0 bg-cover bg-center transition-all duration-700 bg-no-repeat"
         style={{
@@ -1533,15 +1535,48 @@ export default function App() {
         }}
       />
 
+      {/* THREE DYNAMIC AMBIENT GLOWING ORBS FOR DEPTH */}
+      {!bgWelcome && !bgApp && (
+        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+          {/* Orb 1: Sweet Rose Quartz Blush */}
+          <div className="absolute top-[10%] left-[15%] w-[350px] h-[350px] rounded-full bg-pink-300/20 dark:bg-rose-900/15 blur-[100px] sm:blur-[140px] animate-orb-1" />
+          
+          {/* Orb 2: Warm Lilac & Lavender Scent */}
+          <div className="absolute bottom-[15%] right-[10%] w-[420px] h-[420px] rounded-full bg-rose-200/25 dark:bg-[#7A3F52]/20 blur-[110px] sm:blur-[160px] animate-orb-2" />
+          
+          {/* Orb 3: Tender Honey & Gold Clinical Sparkle */}
+          <div className="absolute top-[60%] left-[45%] w-[280px] h-[280px] rounded-full bg-amber-100/15 dark:bg-pink-950/25 blur-[90px] sm:blur-[120px] animate-orb-3" />
+        </div>
+      )}
+
+      {/* AMBIENT MESH GRID PATTERN */}
+      <div className="fixed inset-0 pointer-events-none z-0 ambient-grid mix-blend-normal dark:mix-blend-overlay opacity-60" />
+
+      {/* DECORATIVE CLINICAL/HEART FLOATING BACKGROUND PARTICLES */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none opacity-40">
+        <svg className="absolute top-[12%] left-[8%] w-10 h-10 text-rose-300/35 dark:text-rose-900/35 rotate-12 transition-transform duration-1000 hover:scale-125" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        <svg className="absolute bottom-[25%] left-[5%] w-12 h-12 text-pink-400/20 dark:text-pink-950/30 animate-slow-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        <svg className="absolute top-[45%] right-[6%] w-8 h-8 text-rose-300/30 dark:text-rose-950/35 -rotate-45" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+        </svg>
+        <svg className="absolute bottom-[8%] right-[22%] w-14 h-14 text-rose-200/20 dark:text-rose-900/20 animate-slow-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="0.75">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+      </div>
+
       {/* AMBIENT GRADIENT OVERLAYS FOR APP WINDOW */}
       {screen === "app" && !bgApp && (
-        <div className="fixed inset-0 pointer-events-none z-0 bg-slate-50 dark:bg-gray-950 transition-colors duration-500" />
+        <div className="fixed inset-0 pointer-events-none z-0 bg-transparent transition-colors duration-500" />
       )}
 
       {/* THEME GLOW BLEND OVERLAY */}
-      <div className="fixed inset-0 pointer-events-none z-10 opacity-30 mix-blend-overlay sparkle-glow"
+      <div className="fixed inset-0 pointer-events-none z-10 opacity-35 mix-blend-overlay sparkle-glow"
         style={{
-          background: "radial-gradient(circle at 10% 20%, rgba(211, 140, 157, 0.15) 0%, transparent 60%), radial-gradient(circle at 80% 80%, rgba(165, 81, 102, 0.15) 0%, transparent 60%)"
+          background: "radial-gradient(circle at 10% 20%, rgba(211, 140, 157, 0.25) 0%, transparent 60%), radial-gradient(circle at 80% 80%, rgba(165, 81, 102, 0.2) 0%, transparent 60%)"
         }}
       />
 
@@ -1667,7 +1702,7 @@ export default function App() {
         <div className="relative min-h-screen flex flex-col z-20 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
           
           {/* HEADER BAR */}
-          <header className="relative overflow-hidden min-h-[110px] bg-gradient-to-br from-[#D38C9D] to-[#A55166] text-white p-6 rounded-3xl shadow-xl border border-pink-400/30 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <header className="relative overflow-hidden min-h-[110px] bg-gradient-to-br from-[#D38C9D] to-[#A55166] text-white p-6 rounded-3xl shadow-2xl border border-pink-400/30 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 paper-noise" >
             
             {/* Dots background layer inside header */}
             <div className="header-bg-pattern border-none" />
@@ -1750,7 +1785,7 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4 }}
-              className="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-r from-[#9E182B] via-[#630D1B] to-[#200407] border-2 border-[#F2AFBC]/45 shadow-2xl shadow-[#9E182B]/10 mb-8 flex flex-col md:flex-row items-center justify-between gap-6"
+              className="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-r from-[#9E182B] via-[#630D1B] to-[#200407] border-2 border-[#F2AFBC]/45 shadow-[0_20px_45px_0_rgba(158,24,43,0.18)] mb-8 flex flex-col md:flex-row items-center justify-between gap-6 paper-noise hover:scale-[1.015] transition-all duration-300"
             >
               {/* Background ambient lighting effects inside banner */}
               <div className="absolute top-0 right-0 w-64 h-64 bg-[#F2AFBC]/10 rounded-full blur-3xl pointer-events-none" />
@@ -3240,16 +3275,18 @@ export default function App() {
                               <button
                                 key={cat.id}
                                 onClick={() => setPhdSelectedRoomId(isSelect ? null : cat.id)}
-                                className={`p-4 rounded-2xl border-2 duration-200 transition-all text-left flex flex-col justify-between cursor-pointer mini-bento ${
+                                className={`p-4 rounded-2xl border-2 duration-200 transition-all text-left flex flex-col justify-between cursor-pointer mini-bento paper-noise prompt-card-depth-3d relative overflow-hidden ${
                                   isSelect
                                     ? "bg-[#A55166]/15 border-[#A55166] shadow-md"
                                     : "bg-[#F7DAE7]/35 dark:bg-[#5A444C]/35 border-[#E2B4C1] hover:border-[#D38C9D]"
                                 }`}
                               >
-                                <span className="text-[9px] font-bold text-[#D38C9D] dark:text-[#E2B4C1] tracking-widest block uppercase mb-1">📍 KHU {cat.name}</span>
-                                <div className="text-3xl mb-1.5">{cat.icon || "📂"}</div>
-                                <span className="font-extrabold text-xs text-gray-800 dark:text-gray-200 block">{cat.name}</span>
-                                <span className="text-[10px] text-rose-500 font-semibold block mt-1">{count} Bác Sĩ</span>
+                                {/* Absolute inner backdrop glow layer */}
+                                <div className="absolute inset-0 bg-gradient-to-tr from-pink-150/0 via-transparent to-pink-200/10 dark:to-rose-800/15 opacity-30 hover:opacity-100 transition-opacity duration-300 rounded-2xl pointer-events-none z-0" />
+                                <span className="text-[9px] font-bold text-[#D38C9D] dark:text-[#E2B4C1] tracking-widest block uppercase mb-1 relative z-10">📍 KHU {cat.name}</span>
+                                <div className="text-3xl mb-1.5 relative z-10">{cat.icon || "📂"}</div>
+                                <span className="font-extrabold text-xs text-gray-800 dark:text-gray-200 block relative z-10">{cat.name}</span>
+                                <span className="text-[10px] text-rose-500 font-semibold block mt-1 relative z-10">{count} Bác Sĩ</span>
                               </button>
                             );
                           })}
