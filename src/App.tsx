@@ -544,6 +544,14 @@ export default function App() {
     return localStorage.getItem("bg_app") || null;
   });
 
+  // Social Links Settings
+  const [discordUrl, setDiscordUrl] = useState<string>(() => {
+    return localStorage.getItem("discordUrl") || "https://discord.gg";
+  });
+  const [facebookUrl, setFacebookUrl] = useState<string>(() => {
+    return localStorage.getItem("facebookUrl") || "https://facebook.com";
+  });
+
   // Music Player State
   const [musicUrl, setMusicUrl] = useState<string>(() => {
     return localStorage.getItem("musicUrl") || "";
@@ -566,10 +574,11 @@ export default function App() {
 
   // Modal display states
   const [loginOpen, setLoginOpen] = useState(false);
+  const [welcomeToastOpen, setWelcomeToastOpen] = useState(false);
   const [addPromptOpen, setAddPromptOpen] = useState(false);
   const [editPromptId, setEditPromptId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"general" | "categories" | "about" | "account">("general");
+  const [settingsTab, setSettingsTab] = useState<"general" | "categories" | "about" | "account" | "links">("general");
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [phdOpen, setPhdOpen] = useState(false);
   const [phdTab, setPhdTab] = useState<"find" | "register" | "records">("find");
@@ -1011,8 +1020,13 @@ export default function App() {
       setAdminPassword("");
       setShowAdminPassword(false);
       setAuthError(false);
-      // Navigate to app workspace
-      setScreen("app");
+      
+      // Beautiful popup notification toast "Chào mừng Viện trưởng!" and redirect to main screen
+      setWelcomeToastOpen(true);
+      setTimeout(() => {
+        setScreen("app");
+        setWelcomeToastOpen(false);
+      }, 2000);
     } else {
       setAuthError(true);
     }
@@ -1384,7 +1398,7 @@ export default function App() {
   const handleMusicUploadSubmit = (file: File | null) => {
     if (!file) return;
     if (file.size > 2.5 * 1024 * 1024) {
-      alert("File âm nhạc vượt dung lượng 2.5MB. Vì giới hạn trình duyệt, xin vui lòng dán LINK nhạc YouTube hoặc liên kết âm thanh trực tiếp (Direct Link)!");
+      addToast("File âm nhạc vượt dung lượng 2.5MB. Vì giới hạn trình duyệt, xin vui lòng dán LINK nhạc YouTube hoặc liên kết âm thanh trực tiếp!", "warning");
       return;
     }
     const reader = new FileReader();
@@ -1395,6 +1409,7 @@ export default function App() {
       setMusicTitle(file.name);
       localStorage.setItem("musicTitle", file.name);
       setPlayerPlaying(true);
+      addToast("Nhạc đã được tải lên thành công!", "success");
     };
     reader.readAsDataURL(file);
   };
@@ -1402,13 +1417,13 @@ export default function App() {
   // Save Youtube / Custom streaming URL BGM
   const saveExternalMusic = () => {
     if (!musicUrl.trim()) {
-      alert("Hãy chọn file nhạc hoặc nhập trực tiếp link YouTube vào ô trống nhé!");
+      addToast("Hãy chọn file nhạc hoặc nhập trực tiếp link YouTube vào ô trống nhé!", "warning");
       return;
     }
     localStorage.setItem("musicUrl", musicUrl);
     localStorage.setItem("musicTitle", musicTitle);
     setPlayerPlaying(true);
-    alert("Kích hoạt nhạc nền thành công!");
+    addToast("Nhạc đã được tải lên!", "success");
   };
 
   const clearMusicControl = () => {
@@ -1417,6 +1432,7 @@ export default function App() {
     localStorage.removeItem("musicUrl");
     localStorage.removeItem("musicTitle");
     setPlayerPlaying(false);
+    addToast("Đã gỡ nhạc nền thành công!", "success");
   };
 
   // Click handler on prompt card
@@ -1618,10 +1634,16 @@ export default function App() {
             {/* Admin Login Button */}
             <button 
               type="button"
-              onClick={() => setLoginOpen(true)}
+              onClick={() => {
+                if (isLoggedIn) {
+                  setScreen("app");
+                } else {
+                  setLoginOpen(true);
+                }
+              }}
               className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#A55166]/40 dark:bg-[#A55166]/55 text-white hover:bg-[#A55166]/60 border border-[#D38C9D]/35 transition-all font-bold text-xs sm:text-sm shadow-md cursor-pointer hover:scale-[1.02]"
             >
-              🔑 Đăng Nhập
+              {isLoggedIn ? "🔑Admin ✅" : "🔑Admin"}
             </button>
           </div>
 
@@ -1667,7 +1689,7 @@ export default function App() {
             {/* Social connections links */}
             <div className="flex gap-4 mt-10">
               <a 
-                href="https://discord.gg" 
+                href={discordUrl || "https://discord.gg"} 
                 target="_blank" 
                 rel="noreferrer"
                 className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#5865F2] hover:bg-[#4752C4] hover:scale-105 active:scale-95 text-white font-extrabold text-xs sm:text-sm transition-all shadow-md cursor-pointer"
@@ -1675,7 +1697,7 @@ export default function App() {
                 <span>💬 Discord</span>
               </a>
               <a 
-                href="https://facebook.com" 
+                href={facebookUrl || "https://facebook.com"} 
                 target="_blank" 
                 rel="noreferrer"
                 className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#1877F2] hover:bg-[#1664D4] hover:scale-105 active:scale-95 text-white font-extrabold text-xs sm:text-sm transition-all shadow-md cursor-pointer"
@@ -2649,6 +2671,23 @@ export default function App() {
                   )}
                 </button>
                 <button
+                  onClick={() => setSettingsTab("links")}
+                  className={`relative px-4 py-2 text-xs font-extrabold transition-all cursor-pointer ${
+                    settingsTab === "links"
+                      ? "text-rose-800 dark:text-rose-300"
+                      : "text-gray-400 hover:text-rose-500"
+                  }`}
+                >
+                  <span className="relative z-10">🔗 Liên kết</span>
+                  {settingsTab === "links" && (
+                    <motion.div
+                      layoutId="activeSettingsTabLine"
+                      className="absolute bottom-[-2px] left-0 right-0 h-[2.5px] bg-rose-500 dark:bg-rose-400 z-20"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                </button>
+                <button
                   onClick={() => setSettingsTab("account")}
                   className={`relative px-4 py-2 text-xs font-extrabold transition-all cursor-pointer ${
                     settingsTab === "account"
@@ -2931,6 +2970,62 @@ export default function App() {
                       </div>
                     </div>
 
+                  </motion.div>
+                )}
+
+                {/* TAB CONTENT: SOCIAL LINKS CONFIGURATION */}
+                {settingsTab === "links" && (
+                  <motion.div
+                    key="links"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex flex-col gap-5"
+                  >
+                    <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block">🔗 CÀI ĐẶT LIÊN KẾT NGOÀI</span>
+                    
+                    <div className="flex flex-col gap-4 bg-white dark:bg-black/20 p-5 rounded-2xl border border-pink-100 dark:border-pink-900/40 text-left">
+                      
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5 uppercase tracking-wider">
+                          💬 Đường dẫn Discord:
+                        </label>
+                        <input
+                          type="text"
+                          value={discordUrl}
+                          onChange={(e) => {
+                            setDiscordUrl(e.target.value);
+                            localStorage.setItem("discordUrl", e.target.value);
+                          }}
+                          placeholder="https://discord.gg/..."
+                          className="w-full py-2 px-3 rounded-xl border-2 border-pink-100 dark:border-pink-900 bg-white dark:bg-black/30 text-xs font-semibold outline-none focus:border-blue-400"
+                        />
+                        <span className="text-[10px] text-gray-500">
+                          Nhập liên kết đầy đủ (bao gồm https://) cho nút Discord ngoài trang chào mừng.
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 mt-2">
+                        <label className="text-[10px] font-bold text-[#1877F2] flex items-center gap-1.5 uppercase tracking-wider">
+                          👍 Đường dẫn Facebook:
+                        </label>
+                        <input
+                          type="text"
+                          value={facebookUrl}
+                          onChange={(e) => {
+                            setFacebookUrl(e.target.value);
+                            localStorage.setItem("facebookUrl", e.target.value);
+                          }}
+                          placeholder="https://facebook.com/..."
+                          className="w-full py-2 px-3 rounded-xl border-2 border-pink-100 dark:border-pink-900 bg-white dark:bg-black/30 text-xs font-semibold outline-none focus:border-rose-400"
+                        />
+                        <span className="text-[10px] text-gray-500">
+                          Nhập liên kết đầy đủ (bao gồm https://) cho nút Facebook ngoài trang chào mừng.
+                        </span>
+                      </div>
+
+                    </div>
                   </motion.div>
                 )}
 
@@ -3756,6 +3851,35 @@ export default function App() {
                 >
                   Xác nhận xóa
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* SUCCESS WELCOME TOAST / POPUP */}
+      <AnimatePresence>
+        {welcomeToastOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gradient-to-br from-[#2E0B11] to-[#140205] p-6 rounded-3xl border-2 border-[#9E182B] w-full max-w-sm shadow-2xl relative text-center overflow-hidden flex flex-col gap-4 text-white"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 rounded-full blur-2xl pointer-events-none" />
+              <div className="text-5xl animate-bounce">🩺</div>
+              <h4 className="font-serif italic font-bold text-[#F9CBD6] text-xl">Chào mừng Viện trưởng!</h4>
+              <p className="text-xs text-gray-300">
+                Hệ thống dữ liệu tối cao đã được đồng bộ. Tiến hành di chuyển vào phòng điều hành...
+              </p>
+              <div className="h-1.5 w-full bg-red-950/65 rounded-full overflow-hidden p-[1px] border border-red-900/40">
+                <motion.div 
+                  className="h-full bg-gradient-to-r from-rose-500 to-red-600 rounded-full"
+                  initial={{ width: "0%" }}
+                  animate={{ width: "100%" }}
+                  transition={{ duration: 2, ease: "linear" }}
+                />
               </div>
             </motion.div>
           </div>
