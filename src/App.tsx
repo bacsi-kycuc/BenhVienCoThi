@@ -465,6 +465,9 @@ export default function App() {
         setCategories(list);
       }
     }, (err) => {
+      if (err instanceof Error && (err.message.includes("Quota") || err.message.includes("quota"))) {
+        setDbQuotaError(true);
+      }
       handleFirestoreError(err, OperationType.LIST, "categories");
     });
 
@@ -488,6 +491,9 @@ export default function App() {
         setPrompts(list);
       }
     }, (err) => {
+      if (err instanceof Error && (err.message.includes("Quota") || err.message.includes("quota"))) {
+        setDbQuotaError(true);
+      }
       handleFirestoreError(err, OperationType.LIST, "prompts");
     });
 
@@ -521,6 +527,9 @@ export default function App() {
         setPhdRecords(list);
       }
     }, (err) => {
+      if (err instanceof Error && (err.message.includes("Quota") || err.message.includes("quota"))) {
+        setDbQuotaError(true);
+      }
       handleFirestoreError(err, OperationType.LIST, "phdRecords");
     });
 
@@ -641,6 +650,7 @@ export default function App() {
 
   // --- Vote State & Logic for Doctors/Characters ---
   const [toasts, setToasts] = useState<{ id: number; message: string; type: "success" | "warning" }[]>([]);
+  const [dbQuotaError, setDbQuotaError] = useState<boolean>(false);
 
   const addToast = (message: string, type: "success" | "warning" = "success") => {
     const id = Date.now() + Math.random();
@@ -1539,6 +1549,31 @@ export default function App() {
 
   return (
     <div className={`relative min-h-screen font-sans antialiased text-gray-800 dark:text-gray-100 ${darkMode ? "dark" : ""}`}>
+      
+      {/* DB QUOTA EXCEEDED DISCLAIMER BANNER */}
+      {dbQuotaError && (
+        <div className="sticky top-0 z-50 w-full bg-red-500/90 dark:bg-red-950/95 text-white border-b border-red-400/50 backdrop-blur-md px-4 py-3 shadow-lg flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left text-xs sm:text-sm font-medium">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">⚠️</span>
+            <div>
+              <p className="font-bold text-white">
+                Đã vượt quá giới hạn truy cập cơ sở dữ liệu (Firestore Free Daily Quota)!
+              </p>
+              <p className="text-red-100 opacity-95 mt-0.5 max-w-4xl">
+                Hệ thống đã tự động chuyển sang chế độ dự phòng Offline với dữ liệu mặc định để bạn tiếp tục khám phá. Giới hạn đọc miễn phí (Daily Read) của Spark plan sẽ tự động thiết lập lại vào ngày mai. Để loại bỏ hoàn toàn giới hạn hoặc nâng cấp, vui lòng nhấp vào liên kết quản lý bên dưới.
+              </p>
+            </div>
+          </div>
+          <a
+            href="https://console.firebase.google.com/project/yodeling-bot-x8gvj/firestore/databases/ai-studio-4b862cbd-f0eb-4e6b-86f7-aed4895a6db9/data?openUpgradeDialog=true"
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 bg-white dark:bg-black/40 text-red-600 dark:text-red-200 hover:bg-red-50 dark:hover:bg-black/60 px-4 py-1.5 rounded-lg border border-red-300 dark:border-red-900 transition-all font-bold text-xs shadow-sm shadow-red-950/20 active:scale-95"
+          >
+            Quản lý & Nâng cấp ↗
+          </a>
+        </div>
+      )}
       
       {/* BACKGROUND ELEMENTS & LAYERS */}
       <div 
