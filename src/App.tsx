@@ -85,6 +85,43 @@ export function PromptCard({
   const [enteredUnlockPass, setEnteredUnlockPass] = useState("");
   const [unlockError, setUnlockError] = useState(false);
 
+  // Lazy loading state using IntersectionObserver
+  const [hasBeenSeen, setHasBeenSeen] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (hasBeenSeen) return;
+
+    if (typeof window === "undefined" || !("IntersectionObserver" in window)) {
+      setHasBeenSeen(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setHasBeenSeen(true);
+          }
+        });
+      },
+      {
+        rootMargin: "150px 0px", // Preload 150px before entering viewport
+      }
+    );
+
+    const currentEl = cardRef.current;
+    if (currentEl) {
+      observer.observe(currentEl);
+    }
+
+    return () => {
+      if (currentEl) {
+        observer.unobserve(currentEl);
+      }
+    };
+  }, [hasBeenSeen]);
+
   const parentCat = categories.find(c => c.id === p.category);
   const isLocked = !!p.hasPassword;
 
@@ -126,9 +163,41 @@ export function PromptCard({
     }
   };
 
+  if (!hasBeenSeen) {
+    return (
+      <div
+        ref={cardRef}
+        className="relative overflow-hidden bg-white dark:bg-[#1E2533] rounded-2xl p-5 border-2 border-pink-100 dark:border-pink-950/40 shadow-md h-[256px] flex flex-col justify-between paper-noise prompt-card-depth-3d animate-pulse"
+      >
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-3.5">
+            <div className="h-5 bg-pink-100/60 dark:bg-pink-950/30 rounded-full w-24"></div>
+            <div className="h-5 bg-amber-50/50 dark:bg-amber-950/30 rounded-full w-16"></div>
+          </div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="h-9 w-9 bg-pink-100 dark:bg-pink-950 rounded-xl"></div>
+            <div className="h-5 bg-rose-250/25 dark:bg-[#2e1d21] rounded w-36"></div>
+          </div>
+          <div className="space-y-2 mt-3">
+            <div className="h-3 bg-gray-250/25 dark:bg-gray-800/40 rounded w-full"></div>
+            <div className="h-3 bg-gray-255/25 dark:bg-gray-800/40 rounded w-5/6"></div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-4 mt-4 pt-3 border-t border-gray-100 dark:border-gray-850">
+          <div className="flex gap-1.5 flex-1 w-2/3">
+            <div className="h-4 bg-gray-150/50 dark:bg-gray-850/50 rounded w-12"></div>
+            <div className="h-4 bg-gray-150/50 dark:bg-gray-850/50 rounded w-16"></div>
+          </div>
+          <div className="h-10 bg-gradient-to-br from-[#9E182B]/35 to-[#510A14]/35 border border-[#F2AFBC]/25 rounded-2xl w-24"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div
+        ref={cardRef}
         id={`prompt-card-${p.id}`}
         onClick={handleCardClick}
         className="group relative overflow-hidden bg-white dark:bg-[#1E2533] rounded-2xl p-5 border-2 border-pink-100 dark:border-pink-950/40 shadow-md hover:shadow-xl hover:border-pink-300 dark:hover:border-rose-900 transition-all duration-300 transform hover:-translate-y-1.5 cursor-pointer flex flex-col justify-between paper-noise prompt-card-depth-3d"
@@ -342,7 +411,18 @@ export default function App() {
   // Core Data Lists
   const [categories, setCategories] = useState<PromptCategory[]>(DEFAULT_CATEGORIES);
   const [prompts, setPrompts] = useState<Prompt[]>(DEFAULT_PROMPTS);
-  const [phdRecords, setPhdRecords] = useState<MedicalRecord[]>([]);
+  const [phdRecords, setPhdRecords] = useState<MedicalRecord[]>(() => {
+    try {
+      const fallback = localStorage.getItem("offline_phd_records");
+      if (fallback) {
+        const parsed = JSON.parse(fallback);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to parse local medical records backup", e);
+    }
+    return [];
+  });
 
   // Centralized Troll Overlay states
   const [trollActive, setTrollActive] = useState(false);
@@ -501,6 +581,7 @@ export default function App() {
     const unsubRecords = onSnapshot(collection(db, "phdRecords"), (snapshot) => {
       if (snapshot.empty) {
         // Seeding dynamic sample entries
+        const seededList: MedicalRecord[] = [];
         PHD_SAMPLES.forEach(async (sample, index) => {
           const id = Date.now() - (index * 100000);
           const newRecord: MedicalRecord = {
@@ -512,23 +593,92 @@ export default function App() {
             symptoms: sample.symptoms,
             date: new Date(Date.now() - (index * 86400000)).toLocaleDateString("vi-VN")
           };
+          seededList.push(newRecord);
           try {
             await setDoc(doc(db, "phdRecords", String(id)), newRecord);
           } catch (err) {
             handleFirestoreError(err, OperationType.WRITE, `phdRecords/${id}`);
           }
         });
+        // Optimistically set seeded list so UI starts up immediately
+        setPhdRecords(seededList);
+        localStorage.setItem("offline_phd_records", JSON.stringify(seededList));
       } else {
         const list: MedicalRecord[] = [];
         snapshot.forEach((doc) => {
-          list.push(doc.data() as MedicalRecord);
+          const data = doc.data();
+          
+          // Strict non-NaN, 100% unique deterministic integer hashing from string doc IDs or numeric fallback
+          let idNum = Number(data.id) || Number(doc.id);
+          if (isNaN(idNum) || !idNum) {
+            idNum = 0;
+            const docIdStr = String(doc.id);
+            for (let i = 0; i < docIdStr.length; i++) {
+              idNum = (idNum << 5) - idNum + docIdStr.charCodeAt(i);
+              idNum |= 0;
+            }
+            idNum = Math.abs(idNum) || Date.now();
+          }
+
+          // Normalize Vietnamese category names or other variants dynamically to strict category IDs
+          let rawCat = (data.cat || "").trim();
+          let normalizedCat = rawCat.toLowerCase();
+          if (normalizedCat === "tâm thần" || normalizedCat === "psychiatry" || rawCat.includes("Tâm")) {
+            normalizedCat = "psychiatry";
+          } else if (normalizedCat === "thần kinh" || normalizedCat === "neurology" || rawCat.includes("Thần")) {
+            normalizedCat = "neurology";
+          } else if (normalizedCat === "tim mạch" || normalizedCat === "cardiology" || rawCat.includes("Tim")) {
+            normalizedCat = "cardiology";
+          } else if (normalizedCat === "dịch tễ" || normalizedCat === "epidemiology" || rawCat.includes("Dịch")) {
+            normalizedCat = "epidemiology";
+          } else if (normalizedCat === "nhi khoa" || normalizedCat === "pediatrics" || rawCat.includes("Nhi")) {
+            normalizedCat = "pediatrics";
+          } else {
+            normalizedCat = rawCat; // preserve other user entries
+          }
+          
+          list.push({
+            id: idNum,
+            name: data.name || "Bệnh nhân ẩn danh",
+            age: data.age || "Bí ẩn Không Tiết Lộ",
+            cat: normalizedCat,
+            note: data.note || "",
+            symptoms: Array.isArray(data.symptoms) ? data.symptoms : ["Điều biến tình cảm mập mờ"],
+            date: data.date || new Date().toLocaleDateString("vi-VN")
+          } as MedicalRecord);
         });
-        list.sort((a, b) => b.id - a.id);
-        setPhdRecords(list);
+
+        // Deduplicate records to prevent rendering issues
+        const uniqueList: MedicalRecord[] = [];
+        const seenIds = new Set();
+        list.forEach(item => {
+          if (!seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            uniqueList.push(item);
+          }
+        });
+
+        uniqueList.sort((a, b) => b.id - a.id);
+        setPhdRecords(uniqueList);
+        
+        // Dynamic offline storage backup
+        localStorage.setItem("offline_phd_records", JSON.stringify(uniqueList));
       }
     }, (err) => {
       if (err instanceof Error && (err.message.includes("Quota") || err.message.includes("quota"))) {
         setDbQuotaError(true);
+      }
+      // Load fallback medical records from localStorage on error/quota exhaustion
+      try {
+        const fallback = localStorage.getItem("offline_phd_records");
+        if (fallback) {
+          const list = JSON.parse(fallback);
+          if (Array.isArray(list) && list.length > 0) {
+            setPhdRecords(list);
+          }
+        }
+      } catch (e) {
+        console.error("Local backup loading failed upon database error", e);
       }
       handleFirestoreError(err, OperationType.LIST, "phdRecords");
     });
@@ -1078,8 +1228,33 @@ export default function App() {
       date: new Date().toLocaleDateString("vi-VN")
     };
 
+    // Save to Firestore online
     setDoc(doc(db, "phdRecords", String(recordId)), newRecord)
       .catch(err => handleFirestoreError(err, OperationType.WRITE, `phdRecords/${recordId}`));
+    
+    // Optimistic local storage cache backup & immediate UI update
+    try {
+      const localListStr = localStorage.getItem("offline_phd_records") || "[]";
+      let localList: MedicalRecord[] = [];
+      try {
+        localList = JSON.parse(localListStr);
+        if (!Array.isArray(localList)) localList = [];
+      } catch (errJson) {
+        localList = [];
+      }
+      localList.unshift(newRecord);
+      localStorage.setItem("offline_phd_records", JSON.stringify(localList));
+      
+      // Update state instantly so it appears in the list under custom tab immediately
+      setPhdRecords(prev => {
+        if (prev.some(r => r.id === newRecord.id)) return prev;
+        const nextList = [newRecord, ...prev];
+        nextList.sort((a, b) => b.id - a.id);
+        return nextList;
+      });
+    } catch (e) {
+      console.error("Failed to backup medical record offline locally", e);
+    }
     
     setPhdSuccessSubmitted(true);
     setPhdConfettiActive(true);
@@ -1490,6 +1665,8 @@ export default function App() {
 
   // Delete Diagnostic entries
   const deleteRecordItem = (id: number) => {
+    // Optimistic UI update
+    setPhdRecords(prev => prev.filter(item => item.id !== id));
     deleteDoc(doc(db, "phdRecords", String(id)))
       .catch(err => handleFirestoreError(err, OperationType.DELETE, `phdRecords/${id}`));
   };
@@ -3258,7 +3435,7 @@ export default function App() {
               </div>
 
               {/* PHD Navigation Tabs */}
-              <div className="flex gap-2 px-5 pt-3.5 border-b border-pink-100 dark:border-pink-900/35 overflow-x-auto whitespace-nowrap relative">
+              <div className="flex gap-2 px-5 pt-4 pb-[1px] items-end border-b border-pink-100 dark:border-pink-900/35 overflow-x-auto whitespace-nowrap relative no-scrollbar">
                 <button
                   onClick={() => setPhdTab("find")}
                   className={`relative px-4 py-2.5 rounded-t-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition-all overflow-hidden ${
@@ -3399,13 +3576,14 @@ export default function App() {
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                           {categories.map(cat => {
                             const count = prompts.filter(p => p.category === cat.id).length;
+                            const patientCount = phdRecords.filter(r => r.cat === cat.id).length;
                             const isSelect = phdSelectedRoomId === cat.id;
                             
                             return (
                               <button
                                 key={cat.id}
                                 onClick={() => setPhdSelectedRoomId(isSelect ? null : cat.id)}
-                                className={`p-4 rounded-2xl border-2 duration-200 transition-all text-left flex flex-col justify-between cursor-pointer mini-bento paper-noise prompt-card-depth-3d relative overflow-hidden ${
+                                className={`p-4 min-h-[142px] rounded-2xl border-2 duration-200 transition-all text-left flex flex-col justify-between cursor-pointer mini-bento paper-noise prompt-card-depth-3d relative overflow-hidden ${
                                   isSelect
                                     ? "bg-[#A55166]/15 border-[#A55166] shadow-md"
                                     : "bg-[#F7DAE7]/35 dark:bg-[#5A444C]/35 border-[#E2B4C1] hover:border-[#D38C9D]"
@@ -3416,7 +3594,10 @@ export default function App() {
                                 <span className="text-[9px] font-bold text-[#D38C9D] dark:text-[#E2B4C1] tracking-widest block uppercase mb-1 relative z-10">📍 KHU {cat.name}</span>
                                 <div className="text-3xl mb-1.5 relative z-10">{cat.icon || "📂"}</div>
                                 <span className="font-extrabold text-xs text-gray-800 dark:text-gray-200 block relative z-10">{cat.name}</span>
-                                <span className="text-[10px] text-rose-500 font-semibold block mt-1 relative z-10">{count} Bác Sĩ</span>
+                                <div className="flex flex-col gap-0.5 mt-1 relative z-10">
+                                  <span className="text-[10px] text-rose-500 font-semibold block">{count} Bác Sĩ</span>
+                                  <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-semibold block">🏩 {patientCount} Bệnh nhân</span>
+                                </div>
                               </button>
                             );
                           })}
@@ -3566,7 +3747,7 @@ export default function App() {
                                   type="button"
                                   key={item}
                                   onClick={() => toggleSymptom(item)}
-                                  className={`p-2 rounded-xl text-left border text-xs leading-relaxed font-bold transition-all ${
+                                  className={`p-2.5 min-h-[52px] rounded-xl text-left border text-[11px] leading-snug font-bold transition-all flex items-center gap-2 ${
                                     checked 
                                       ? "bg-[#A55166]/10 border-[#A55166] text-[#A55166]"
                                       : "bg-[#F7DAE7]/10 dark:bg-black/10 border-pink-100 dark:border-pink-900 text-gray-700 dark:text-gray-300 hover:bg-pink-100"
@@ -3576,9 +3757,9 @@ export default function App() {
                                     type="checkbox" 
                                     checked={checked} 
                                     readOnly 
-                                    className="mr-2 accent-[#A55166] pointer-events-none" 
+                                    className="mr-1 accent-[#A55166] pointer-events-none flex-shrink-0" 
                                   />
-                                  {item}
+                                  <span className="flex-1 leading-tight">{item}</span>
                                 </button>
                               );
                             })}
@@ -3659,10 +3840,14 @@ export default function App() {
                         onChange={(e) => setPhdRecordFilter(e.target.value)}
                         className="py-2 px-3 rounded-xl border border-[#E2B4C1] bg-white dark:bg-black/30 text-xs font-semibold outline-none focus:outline-none cursor-pointer text-gray-800 dark:text-gray-100"
                       >
-                        <option value="">🗂️ Tất cả các khoa</option>
-                        {categories.map(c => (
-                          <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                        ))}
+                        <option value="">🗂️ Tất cả các khoa ({phdRecords.length} người)</option>
+                        {categories.map(c => {
+                          const pCount = phdRecords.filter(r => r.cat === c.id).length;
+                          return (
+                            <option key={c.id} value={c.id}>{c.icon} {c.name} ({pCount} người)</option>
+                          );
+                        })}
+                        <option value="unassigned">⚠️ Khoa khác / Chưa phân khoa ({phdRecords.filter(r => !r.cat || !categories.some(c => c.id === r.cat)).length} người)</option>
                       </select>
                     </div>
 
@@ -3670,37 +3855,47 @@ export default function App() {
                     <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto pr-1">
                       {phdRecords
                         .filter(r => {
+                          if (!r) return false;
+                          const name = r.name || "Bệnh nhân ẩn danh";
+                          const note = r.note || "";
                           const matchesSearch = 
-                            r.name.toLowerCase().includes(phdRecordSearch.toLowerCase()) ||
-                            r.note.toLowerCase().includes(phdRecordSearch.toLowerCase());
-                          const matchesFilter = !phdRecordFilter || r.cat === phdRecordFilter;
+                            name.toLowerCase().includes(phdRecordSearch.toLowerCase()) ||
+                            note.toLowerCase().includes(phdRecordSearch.toLowerCase());
+                          const matchesFilter = !phdRecordFilter 
+                            ? true 
+                            : phdRecordFilter === "unassigned"
+                              ? (!r.cat || !categories.some(c => c.id === r.cat))
+                              : r.cat === phdRecordFilter;
                           return matchesSearch && matchesFilter;
                         })
                         .map(r => {
                           const recordCat = categories.find(c => c.id === r.cat);
                           const isExpanded = !!expandedRecordIds[r.id];
+                          const symptoms = r.symptoms || [];
                           
                           return (
                             <div 
                               key={r.id}
-                              className="border border-[#E2B4C1]/60 dark:border-pink-900/50 rounded-2xl bg-[#F7DAE7]/15 dark:bg-[#5A444C]/10 overflow-hidden"
+                              className="border border-[#E2B4C1]/60 dark:border-pink-900/30 rounded-2xl bg-white/95 dark:bg-[#1e1416]/95 overflow-hidden shadow-sm hover:shadow active:scale-[0.99] transition-all duration-200 p-0.5"
                             >
                               
                               {/* Accordion title header */}
                               <div 
                                 onClick={() => toggleRecordExpand(r.id)}
-                                className="p-3.5 flex justify-between items-center gap-3 hover:bg-pink-100/50 dark:hover:bg-rose-950/20 cursor-pointer transition-colors"
+                                className="p-4 flex justify-between items-center gap-3 hover:bg-pink-100/30 dark:hover:bg-rose-950/10 cursor-pointer transition-colors"
                               >
-                                <div className="flex items-center gap-2">
-                                  <User size={14} className="text-[#A55166]" />
-                                  <span className="font-bold text-xs text-gray-800 dark:text-gray-200">{r.name}</span>
-                                  <span className="text-[10px] font-semibold text-rose-500 bg-rose-50 dark:bg-pink-950/40 px-2.5 py-0.5 rounded-full">
-                                    {recordCat ? recordCat.name : "Phát hoang"}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <div className="w-5 h-5 rounded-full bg-pink-100 dark:bg-pink-950/60 flex items-center justify-center text-[#A55166] dark:text-pink-300">
+                                    <User size={11} />
+                                  </div>
+                                  <span className="font-extrabold text-xs text-gray-800 dark:text-gray-100">{r.name || "Bệnh nhân ẩn danh"}</span>
+                                  <span className="text-[9px] uppercase tracking-wide font-black text-white bg-gradient-to-r from-pink-500 to-rose-600 px-2 py-0.5 rounded-full shadow-xs">
+                                    {recordCat ? `${recordCat.icon} ${recordCat.name}` : "🏥 Chưa phân khoa"}
                                   </span>
                                 </div>
                                 
                                 <div className="flex items-center gap-3">
-                                  <span className="text-[10px] text-gray-400 font-mono italic">{r.date}</span>
+                                  <span className="text-[9px] text-gray-400 dark:text-gray-500 font-mono italic">{r.date || "Vừa xong"}</span>
                                   
                                   {/* Delete card */}
                                   <button
@@ -3708,46 +3903,70 @@ export default function App() {
                                       e.stopPropagation();
                                       deleteRecordItem(r.id);
                                     }}
-                                    className="p-1 rounded bg-[#e05568]/10 hover:bg-[#e05568]/20 text-[#e05568] transition-colors"
+                                    className="p-1 rounded-lg bg-red-100/75 hover:bg-red-200/90 dark:bg-red-950/40 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
                                     title="Thu hồi bệnh án"
                                   >
                                     <Trash2 size={11} />
                                   </button>
 
-                                  {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                  <div className="text-gray-400 dark:text-gray-500 hover:text-rose-500 transition-colors">
+                                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                  </div>
                                 </div>
                               </div>
 
                               {/* Expandable record contents */}
                               {isExpanded && (
-                                <div className="px-4 pb-4 pt-1 border-t border-pink-100 dark:border-pink-950/30 flex flex-col gap-3 bg-white/50 dark:bg-black/30">
+                                <div className="px-4 pb-4 pt-2.5 border-t border-pink-100 dark:border-pink-950/30 flex flex-col gap-3 bg-pink-50/20 dark:bg-black/15">
                                   
-                                  <div className="grid grid-cols-2 gap-3 pt-2">
+                                  <div className="grid grid-cols-2 gap-3 pt-1">
                                     <div className="flex flex-col gap-0.5 text-xs">
-                                      <span className="text-[10px] text-[#A55166] font-bold uppercase tracking-wide">Nhóm tuổi:</span>
-                                      <span className="text-gray-700 dark:text-gray-300 font-semibold">{r.age}</span>
+                                      <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Nhóm tuổi:</span>
+                                      <span className="text-gray-750 dark:text-gray-300 font-bold">{r.age || "Bí ẩn"}</span>
                                     </div>
                                     <div className="flex flex-col gap-0.5 text-xs">
-                                      <span className="text-[10px] text-[#A55166] font-bold uppercase tracking-wide">Tiếp nhận tại:</span>
-                                      <span className="text-gray-700 dark:text-gray-300 font-semibold">{recordCat?.icon} {recordCat?.name}</span>
+                                      <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Khoa tiếp nhận chẩn trị:</span>
+                                      <select
+                                        value={r.cat || ""}
+                                        onChange={async (e) => {
+                                          const newCatId = e.target.value;
+                                          const updatedRecord = { ...r, cat: newCatId };
+                                          try {
+                                            await setDoc(doc(db, "phdRecords", String(r.id)), updatedRecord);
+                                          } catch (err) {
+                                            handleFirestoreError(err, OperationType.WRITE, `phdRecords/${r.id}`);
+                                          }
+                                          setPhdRecords(prev => prev.map(item => item.id === r.id ? updatedRecord : item));
+                                          addToast(`Đã chuyển bệnh án "${r.name || "ẩn danh"}" sang khoa mới thành công!`, "success");
+                                        }}
+                                        className="py-1 px-1.5 rounded-lg border border-[#E2B4C1] bg-white dark:bg-zinc-800 text-[10px] font-extrabold outline-none cursor-pointer text-gray-800 dark:text-gray-100 mt-1 shadow-xs"
+                                      >
+                                        <option value="">⚠️ Chưa phân khoa / Khoa cũ</option>
+                                        {categories.map(c => (
+                                          <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                                        ))}
+                                      </select>
                                     </div>
                                   </div>
 
-                                  <div className="flex flex-col gap-0.5 text-xs">
-                                    <span className="text-[10px] text-[#A55166] font-bold uppercase tracking-wide">Triệu chứng chẩn y trị học:</span>
+                                  <div className="flex flex-col gap-1 text-xs">
+                                    <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Triệu chứng chẩn y trị học:</span>
                                     <div className="flex flex-wrap gap-1 mt-1">
-                                      {r.symptoms.map(s => (
-                                        <span key={s} className="text-[10px] bg-rose-50 dark:bg-rose-950 text-rose-800 dark:text-rose-300 px-2 py-0.5 rounded border border-rose-100">
+                                      {symptoms.map(s => (
+                                        <span key={s} className="text-[10px] font-bold bg-rose-50/70 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 px-2 py-0.5 rounded-lg border border-rose-100/50 dark:border-pink-900/15">
                                           {s}
                                         </span>
                                       ))}
+                                      {symptoms.length === 0 && (
+                                        <span className="text-[10px] text-gray-400 italic">Không có triệu chứng</span>
+                                      )}
                                     </div>
                                   </div>
 
-                                  <div className="flex flex-col gap-0.5 text-xs">
-                                    <span className="text-[10px] text-[#A55166] font-bold uppercase tracking-wide">Lời tự thuật chi tiết hành vi:</span>
-                                    <p className="text-gray-600 dark:text-gray-300 leading-relaxed italic bg-pink-50/20 dark:bg-black/45 p-2 rounded-xl border border-pink-100/40">
-                                      "{r.note}"
+                                  <div className="flex flex-col gap-1 text-xs">
+                                    <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Lời tự thuật chi tiết hành vi:</span>
+                                    <p className="text-gray-600 dark:text-gray-350 leading-relaxed italic bg-pink-100/10 dark:bg-black/25 p-3 rounded-xl border border-pink-100/30 dark:border-pink-900/10 font-medium">
+                                      "{r.note || "(Không ghi chép hành vi)"}"
                                     </p>
                                   </div>
 
