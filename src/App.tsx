@@ -85,6 +85,20 @@ export function PromptCard({
   const [enteredUnlockPass, setEnteredUnlockPass] = useState("");
   const [unlockError, setUnlockError] = useState(false);
 
+  const [animateVote, setAnimateVote] = useState(false);
+  const prevVotesRef = useRef(p.votes ?? 0);
+
+  useEffect(() => {
+    if (p.votes !== undefined && p.votes > prevVotesRef.current) {
+      setAnimateVote(true);
+      const timer = setTimeout(() => setAnimateVote(false), 600);
+      prevVotesRef.current = p.votes;
+      return () => clearTimeout(timer);
+    } else if (p.votes !== undefined) {
+      prevVotesRef.current = p.votes;
+    }
+  }, [p.votes]);
+
   // Lazy loading state using IntersectionObserver
   const [hasBeenSeen, setHasBeenSeen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -277,6 +291,7 @@ export function PromptCard({
           {(() => {
             const today = new Date().toLocaleDateString("sv");
             const hasVotedToday = votedDates[String(p.id)] === today;
+            const isLevelUp = (p.votes ?? 0) >= 100;
             return (
               <motion.button
                 type="button"
@@ -288,18 +303,47 @@ export function PromptCard({
                   e.preventDefault();
                   onVote(String(p.id));
                 }}
-                className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-gradient-to-br from-[#9E182B] to-[#510A14] border border-[#F2AFBC]/50 hover:border-[#F9CBD6] shadow-xl text-center transition-all cursor-pointer min-w-[88px] z-10"
+                className={`flex flex-col items-center justify-center p-2.5 rounded-2xl bg-gradient-to-br from-[#9E182B] to-[#510A14] ${
+                  isLevelUp 
+                    ? "border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.5)]" 
+                    : "border border-[#F2AFBC]/50 hover:border-[#F9CBD6]"
+                } shadow-xl text-center transition-all cursor-pointer min-w-[88px] z-10`}
               >
-                <span className="text-[11px] font-black uppercase text-[#F9CBD6] tracking-wider select-none mb-1.5 drop-shadow-sm">
-                  {votesData[String(p.id)] ?? p.votes ?? 0} PHIẾU
-                </span>
-                <Heart 
-                  className={`h-6 w-6 transition-all duration-200 ${
-                    hasVotedToday 
-                      ? "stroke-[#F2E0D2] fill-[#F2AFBC] drop-shadow-sm scale-110" 
-                      : "stroke-[#F2E0D2] fill-transparent hover:fill-[#F2AFBC] hover:stroke-[#9E182B]"
-                  }`} 
-                />
+                <motion.span 
+                  animate={animateVote ? { scale: [1, 1.25, 0.95, 1], y: [0, -4, 2, 0] } : {}}
+                  transition={{ duration: 0.5, ease: "easeInOut" }}
+                  className={`text-[11px] font-black uppercase tracking-wider select-none mb-1.5 drop-shadow-sm block ${
+                    isLevelUp ? "text-amber-350 font-extrabold" : "text-[#F9CBD6]"
+                  }`}
+                >
+                  {p.votes ?? 0} PHIẾU
+                </motion.span>
+                <motion.div
+                  animate={
+                    animateVote 
+                      ? isLevelUp
+                        ? { scale: [1, 1.8, 0.7, 1.4, 1], rotate: [0, 360] }
+                        : { scale: [1, 1.45, 0.85, 1.15, 1], rotate: [0, -15, 15, -5, 0] }
+                      : {}
+                  }
+                  transition={
+                    animateVote && isLevelUp
+                      ? { duration: 0.35, ease: "easeOut" }
+                      : { duration: 0.6, ease: "easeInOut" }
+                  }
+                >
+                  <Heart 
+                    className={`${isLevelUp ? "h-8 w-8" : "h-6 w-6"} transition-all duration-200 ${
+                      hasVotedToday 
+                        ? isLevelUp
+                          ? "stroke-amber-300 fill-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.8)] scale-110"
+                          : "stroke-[#F2E0D2] fill-[#F2AFBC] drop-shadow-sm scale-110" 
+                        : isLevelUp
+                          ? "stroke-amber-400 fill-transparent hover:fill-amber-400"
+                          : "stroke-[#F2E0D2] fill-transparent hover:fill-[#F2AFBC] hover:stroke-[#9E182B]"
+                    }`} 
+                  />
+                </motion.div>
               </motion.button>
             );
           })()}
@@ -580,29 +624,8 @@ export default function App() {
     // 3. Subscribe to Medical Records
     const unsubRecords = onSnapshot(collection(db, "phdRecords"), (snapshot) => {
       if (snapshot.empty) {
-        // Seeding dynamic sample entries
-        const seededList: MedicalRecord[] = [];
-        PHD_SAMPLES.forEach(async (sample, index) => {
-          const id = Date.now() - (index * 100000);
-          const newRecord: MedicalRecord = {
-            id,
-            name: sample.name,
-            age: sample.age,
-            cat: sample.cat,
-            note: sample.note,
-            symptoms: sample.symptoms,
-            date: new Date(Date.now() - (index * 86400000)).toLocaleDateString("vi-VN")
-          };
-          seededList.push(newRecord);
-          try {
-            await setDoc(doc(db, "phdRecords", String(id)), newRecord);
-          } catch (err) {
-            handleFirestoreError(err, OperationType.WRITE, `phdRecords/${id}`);
-          }
-        });
-        // Optimistically set seeded list so UI starts up immediately
-        setPhdRecords(seededList);
-        localStorage.setItem("offline_phd_records", JSON.stringify(seededList));
+        setPhdRecords([]);
+        localStorage.setItem("offline_phd_records", JSON.stringify([]));
       } else {
         const list: MedicalRecord[] = [];
         snapshot.forEach((doc) => {
@@ -847,8 +870,8 @@ export default function App() {
       let changed = false;
       const updated = { ...prev };
       prompts.forEach(p => {
-        if (updated[String(p.id)] === undefined) {
-          updated[String(p.id)] = p.votes || 0;
+        if (updated[String(p.id)] !== (p.votes ?? 0)) {
+          updated[String(p.id)] = p.votes ?? 0;
           changed = true;
         }
       });
@@ -871,6 +894,16 @@ export default function App() {
     if (votedDates[characterId] === today) {
       addToast(`💖 Hôm nay bé đã thả tim cho "${charName}" rồi!`, "warning");
       return;
+    }
+
+    // Update global Firestore database vote count
+    if (char) {
+      const updatedPrompt = {
+        ...char,
+        votes: (char.votes || 0) + 1
+      };
+      setDoc(doc(db, "prompts", String(characterId)), updatedPrompt)
+        .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${characterId}`));
     }
 
     // 1. Update votesData State and localStorage
@@ -1260,6 +1293,7 @@ export default function App() {
     setPhdConfettiActive(true);
 
     // Reset input fields
+    setPhdRecordSearch(newRecord.name); // Preset search query with patient name to safely show their record
     setPhdName("");
     setPhdAge("");
     setPhdSelectedCat("");
@@ -1345,6 +1379,7 @@ export default function App() {
 
     if (editPromptId !== null) {
       // Edit existing prompt
+      const oldPrompt = prompts.find(p => p.id === editPromptId);
       const updatedPrompt: Prompt = {
         id: editPromptId,
         name: formName.trim(),
@@ -1358,7 +1393,8 @@ export default function App() {
         password: formHasPassword ? formCorrectPassword.trim() : null,
         passwordFailLimit: formHasPassword ? formPasswordFailLimit : 5,
         passwordFailGifUrl: formHasPassword ? formPasswordFailGifUrl.trim() : "",
-        passwordFailSoundUrl: formHasPassword ? formPasswordFailSoundUrl.trim() : ""
+        passwordFailSoundUrl: formHasPassword ? formPasswordFailSoundUrl.trim() : "",
+        votes: oldPrompt ? (oldPrompt.votes ?? 0) : 0
       };
       setDoc(doc(db, "prompts", String(editPromptId)), updatedPrompt)
         .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${editPromptId}`));
@@ -1378,7 +1414,8 @@ export default function App() {
         password: formHasPassword ? formCorrectPassword.trim() : null,
         passwordFailLimit: formHasPassword ? formPasswordFailLimit : 5,
         passwordFailGifUrl: formHasPassword ? formPasswordFailGifUrl.trim() : "",
-        passwordFailSoundUrl: formHasPassword ? formPasswordFailSoundUrl.trim() : ""
+        passwordFailSoundUrl: formHasPassword ? formPasswordFailSoundUrl.trim() : "",
+        votes: 0 // New nurse starts with exactly 0 votes
       };
       setDoc(doc(db, "prompts", String(promptId)), newPrompt)
         .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${promptId}`));
@@ -1692,11 +1729,11 @@ export default function App() {
   // Compute leading character for Honor Banner (character with maximum votes)
   const leadingCharacter = (() => {
     if (prompts.length === 0) return null;
-    let bestPrompt: Prompt | null = prompts[0];
-    let maxVotes = -1;
+    let bestPrompt: Prompt | null = null;
+    let maxVotes = 0; // Initialize at 0, so only prompts with at least 1 real vote can lead
     
     prompts.forEach(p => {
-      const votes = votesData[String(p.id)] ?? p.votes ?? 0;
+      const votes = p.votes ?? 0;
       if (votes > maxVotes) {
         maxVotes = votes;
         bestPrompt = p;
@@ -3853,22 +3890,49 @@ export default function App() {
 
                     {/* Records visual render */}
                     <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto pr-1">
-                      {phdRecords
-                        .filter(r => {
+                      {(() => {
+                        const isQuerying = phdRecordSearch.trim() !== "";
+                        
+                        const finalRecords = phdRecords.filter(r => {
                           if (!r) return false;
                           const name = r.name || "Bệnh nhân ẩn danh";
                           const note = r.note || "";
                           const matchesSearch = 
                             name.toLowerCase().includes(phdRecordSearch.toLowerCase()) ||
-                            note.toLowerCase().includes(phdRecordSearch.toLowerCase());
+                            note.toLowerCase().includes(phdRecordSearch.toLowerCase()) ||
+                            String(r.id).toLowerCase().includes(phdRecordSearch.toLowerCase());
                           const matchesFilter = !phdRecordFilter 
                             ? true 
                             : phdRecordFilter === "unassigned"
                               ? (!r.cat || !categories.some(c => c.id === r.cat))
                               : r.cat === phdRecordFilter;
                           return matchesSearch && matchesFilter;
-                        })
-                        .map(r => {
+                        });
+
+                        // Security: If not signed-in doctor/admin, require exact name or record ID lookup instead of leaking medical list publicly
+                        if (!isLoggedIn && !isQuerying) {
+                          return (
+                            <div className="text-center py-8 text-gray-500 dark:text-gray-400 flex flex-col items-center p-6 bg-[#F7DAE7]/10 dark:bg-black/10 rounded-2xl border border-dashed border-[#E2B4C1]">
+                              <span className="text-4xl block mb-2">🔒</span>
+                              <span className="font-extrabold text-[#A55166] dark:text-pink-300 text-sm">Tra cứu Sổ Khám Cá Nhân</span>
+                              <p className="text-xs text-gray-550 mt-2 max-w-sm leading-relaxed">
+                                Để bảo mật thông tin y chẩn điều trị, vui lòng nhập chính xác **Mã số khám (Mã bệnh án)** hoặc **Tên bệnh nhân** vào thanh tìm kiếm phía trên để tra cứu hồ sơ chẩn trị của riêng bạn.
+                              </p>
+                            </div>
+                          );
+                        }
+
+                        if (finalRecords.length === 0) {
+                          return (
+                            <div className="text-center py-10 text-gray-400 flex flex-col items-center">
+                              <span className="text-4xl block mb-2">🗂️</span>
+                              <span className="font-bold">Không tìm thấy bệnh tích thích hợp!</span>
+                              <p className="text-xs text-gray-400 mt-1">Vui lòng thử tìm kiếm bằng từ khoá hoặc Mã số khám khác.</p>
+                            </div>
+                          );
+                        }
+
+                        return finalRecords.map(r => {
                           const recordCat = categories.find(c => c.id === r.cat);
                           const isExpanded = !!expandedRecordIds[r.id];
                           const symptoms = r.symptoms || [];
@@ -3897,17 +3961,19 @@ export default function App() {
                                 <div className="flex items-center gap-3">
                                   <span className="text-[9px] text-gray-400 dark:text-gray-500 font-mono italic">{r.date || "Vừa xong"}</span>
                                   
-                                  {/* Delete card */}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      deleteRecordItem(r.id);
-                                    }}
-                                    className="p-1 rounded-lg bg-red-100/75 hover:bg-red-200/90 dark:bg-red-950/40 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
-                                    title="Thu hồi bệnh án"
-                                  >
-                                    <Trash2 size={11} />
-                                  </button>
+                                  {/* Delete card - Only visible for signed-in doctor/admin */}
+                                  {isLoggedIn && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteRecordItem(r.id);
+                                      }}
+                                      className="p-1 rounded-lg bg-red-100/75 hover:bg-red-200/90 dark:bg-red-950/40 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
+                                      title="Thu hồi bệnh án"
+                                    >
+                                      <Trash2 size={11} />
+                                    </button>
+                                  )}
 
                                   <div className="text-gray-400 dark:text-gray-500 hover:text-rose-500 transition-colors">
                                     {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -3921,31 +3987,44 @@ export default function App() {
                                   
                                   <div className="grid grid-cols-2 gap-3 pt-1">
                                     <div className="flex flex-col gap-0.5 text-xs">
+                                      <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Mã số khám:</span>
+                                      <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono text-[10px] select-all bg-emerald-500/5 px-1.5 py-0.5 rounded border border-emerald-500/10 w-fit">{r.id}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-0.5 text-xs">
                                       <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Nhóm tuổi:</span>
                                       <span className="text-gray-750 dark:text-gray-300 font-bold">{r.age || "Bí ẩn"}</span>
                                     </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 gap-3">
                                     <div className="flex flex-col gap-0.5 text-xs">
                                       <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Khoa tiếp nhận chẩn trị:</span>
-                                      <select
-                                        value={r.cat || ""}
-                                        onChange={async (e) => {
-                                          const newCatId = e.target.value;
-                                          const updatedRecord = { ...r, cat: newCatId };
-                                          try {
-                                            await setDoc(doc(db, "phdRecords", String(r.id)), updatedRecord);
-                                          } catch (err) {
-                                            handleFirestoreError(err, OperationType.WRITE, `phdRecords/${r.id}`);
-                                          }
-                                          setPhdRecords(prev => prev.map(item => item.id === r.id ? updatedRecord : item));
-                                          addToast(`Đã chuyển bệnh án "${r.name || "ẩn danh"}" sang khoa mới thành công!`, "success");
-                                        }}
-                                        className="py-1 px-1.5 rounded-lg border border-[#E2B4C1] bg-white dark:bg-zinc-800 text-[10px] font-extrabold outline-none cursor-pointer text-gray-800 dark:text-gray-100 mt-1 shadow-xs"
-                                      >
-                                        <option value="">⚠️ Chưa phân khoa / Khoa cũ</option>
-                                        {categories.map(c => (
-                                          <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                                        ))}
-                                      </select>
+                                      {isLoggedIn ? (
+                                        <select
+                                          value={r.cat || ""}
+                                          onChange={async (e) => {
+                                            const newCatId = e.target.value;
+                                            const updatedRecord = { ...r, cat: newCatId };
+                                            try {
+                                              await setDoc(doc(db, "phdRecords", String(r.id)), updatedRecord);
+                                            } catch (err) {
+                                              handleFirestoreError(err, OperationType.WRITE, `phdRecords/${r.id}`);
+                                            }
+                                            setPhdRecords(prev => prev.map(item => item.id === r.id ? updatedRecord : item));
+                                            addToast(`Đã chuyển bệnh án "${r.name || "ẩn danh"}" sang khoa mới thành công!`, "success");
+                                          }}
+                                          className="py-1 px-1.5 rounded-lg border border-[#E2B4C1] bg-white dark:bg-zinc-800 text-[10px] font-extrabold outline-none cursor-pointer text-gray-800 dark:text-gray-100 mt-1 shadow-xs"
+                                        >
+                                          <option value="">⚠️ Chưa phân khoa / Khoa cũ</option>
+                                          {categories.map(c => (
+                                            <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <span className="text-gray-750 dark:text-gray-300 font-bold mt-1 text-[11px]">
+                                          {recordCat ? `${recordCat.icon} ${recordCat.name}` : "⚠️ Chưa phân khoa"}
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
 
@@ -3975,15 +4054,8 @@ export default function App() {
 
                             </div>
                           );
-                        })}
-
-                      {phdRecords.length === 0 && (
-                        <div className="text-center py-10 text-gray-400 flex flex-col items-center">
-                          <span className="text-4xl block mb-2">🗂️</span>
-                          <span className="font-bold">Sổ khám bệnh đặc khu Cố Thị hiện chưa có bệnh tích!</span>
-                          <p className="text-xs text-gray-400 mt-1">Hãy chuyển sang tab "Khám Bệnh Mới" để lưu giữ hồ sơ chẩn trị của riêng bạn.</p>
-                        </div>
-                      )}
+                        });
+                      })()}
                     </div>
 
                   </motion.div>
