@@ -2032,11 +2032,6 @@ export default function App() {
             transition={{ duration: 0.6 }}
             className="flex flex-col items-center text-center max-w-full px-4 select-none my-auto"
           >
-            {/* Top custom clinical badge icon */}
-            <div className="text-6xl mb-6 filter drop-shadow-md animate-bounce duration-[3000ms]">
-              🏥
-            </div>
-            
             {/* Title: Serif, italic uppercase with warm colors */}
             <h1 className="font-serif italic text-[1.4rem] sm:text-3xl md:text-5xl xl:text-6xl font-black uppercase whitespace-nowrap text-[#A55166] dark:text-[#F7DAE7] tracking-wider mb-2">
               VIỆN TÂM THẦN CỐ THỊ
@@ -2058,9 +2053,8 @@ export default function App() {
                 setPhdOpen(true);
                 setPhdTab("find");
               }}
-              className="group relative cursor-pointer select-none transition-all duration-300 w-44 h-44 rounded-[28px] bg-[#A55166]/55 dark:bg-[#A55166]/70 hover:bg-[#A55166]/75 hover:scale-105 active:scale-95 border border-[#D38C9D]/40 text-white font-extrabold text-base shadow-xl flex flex-col items-center justify-center gap-3"
+              className="group relative cursor-pointer select-none transition-all duration-300 w-44 h-44 rounded-[28px] bg-[#A55166]/55 dark:bg-[#A55166]/70 hover:bg-[#A55166]/75 hover:scale-105 active:scale-95 border border-[#D38C9D]/40 text-white font-extrabold text-lg shadow-xl flex items-center justify-center"
             >
-              <span className="text-4xl">🏥</span>
               <span className="tracking-wide">Nhập Viện</span>
             </button>
 
