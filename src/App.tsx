@@ -25,6 +25,7 @@ import {
   Unlock, 
   HelpCircle, 
   Calendar, 
+  Clock, 
   Trash2, 
   BookOpen, 
   PlusCircle, 
@@ -216,21 +217,23 @@ export function PromptCard({
       <div
         ref={cardRef}
         id={`prompt-card-${p.id}`}
-        onClick={handleCardClick}
-        className="group relative overflow-hidden bg-white dark:bg-[#1E2533] rounded-2xl p-5 border-2 border-pink-100 dark:border-pink-950/40 shadow-md hover:shadow-xl hover:border-pink-300 dark:hover:border-rose-900 transition-all duration-300 transform hover:-translate-y-1.5 cursor-pointer flex flex-col justify-between paper-noise prompt-card-depth-3d"
+        className="group relative overflow-hidden bg-white dark:bg-[#1E2533] rounded-2xl p-5 border-2 border-pink-100 dark:border-pink-950/40 shadow-md hover:shadow-xl hover:border-pink-300 dark:hover:border-rose-900 transition-all duration-300 transform hover:-translate-y-1.5 cursor-default flex flex-col justify-between paper-noise prompt-card-depth-3d pointer-events-auto"
       >
         {/* Dynamic backdrop glowing layer responsive to scaling and changing opacity on hover */}
         <div className="absolute inset-0 bg-gradient-to-tr from-pink-150/0 via-transparent to-pink-200/10 dark:to-rose-800/15 opacity-40 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500 rounded-2xl pointer-events-none z-0" />
         
         {/* Active edit/delete controls for logged admins */}
         {isLoggedIn && (
-          <div className="absolute top-4 right-4 z-20 flex gap-1 bg-white/90 dark:bg-gray-900/90 rounded-xl p-1 border border-pink-100 dark:border-pink-950 shadow-sm">
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="absolute top-4 right-4 z-20 flex gap-1 bg-white/90 dark:bg-gray-900/90 rounded-xl p-1 border border-pink-100 dark:border-pink-950 shadow-sm pointer-events-auto"
+          >
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit(p);
               }}
-              className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-transform hover:scale-110"
+              className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-transform hover:scale-110 pointer-events-auto"
               title="Sửa"
             >
               ✏️
@@ -240,7 +243,7 @@ export function PromptCard({
                 e.stopPropagation();
                 onDelete(p.id);
               }}
-              className="p-1.5 text-red-500 hover:bg-red-100 rounded-lg transition-transform hover:scale-110"
+              className="p-1.5 text-red-500 hover:bg-red-100 rounded-lg transition-transform hover:scale-110 pointer-events-auto"
               title="Xóa"
             >
               🗑️
@@ -249,8 +252,8 @@ export function PromptCard({
         )}
 
         {/* Top Header Card row */}
-        <div>
-          <div className="flex items-center justify-between gap-2 mb-3.5">
+        <div className="pointer-events-none">
+          <div className="flex items-center justify-between gap-2 mb-3.5 pointer-events-none">
             {parentCat && (
               <span className="text-[10px] font-extrabold uppercase tracking-wide bg-rose-50 dark:bg-pink-950/50 text-rose-800 dark:text-rose-300 px-2.5 py-1 rounded-full border border-pink-100/50 dark:border-pink-900/30">
                 {parentCat.icon} {parentCat.name}
@@ -271,9 +274,45 @@ export function PromptCard({
             <span className="truncate max-w-[200px] inline-block">{p.name}</span>
           </h3>
 
-          <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-4 line-clamp-3 font-medium">
+          <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-3 line-clamp-2 font-medium">
             {p.description}
           </p>
+
+          {/* Subtle Metadata Row */}
+          <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-gray-500 font-medium mb-3.5">
+            <span className="flex items-center gap-1">
+              <Eye size={12} className="text-pink-300 dark:text-pink-900" />
+              <span>{p.views ?? Math.floor(((p.id * 324) % 1500) + 200)} lượt xem</span>
+            </span>
+            <span className="w-1 h-1 rounded-full bg-gray-200 dark:bg-gray-800" />
+            <span className="flex items-center gap-1">
+              <Clock size={12} className="text-pink-300 dark:text-pink-900" />
+              <span>{p.updatedAt ?? "2 ngày trước"}</span>
+            </span>
+            {p.isNew && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-gray-200 dark:bg-gray-800" />
+                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold uppercase bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-150/30">Mới</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Actions row wrapping is made interactive explicitly */}
+        <div className="pointer-events-auto w-full z-10 grid grid-cols-2 gap-2 mb-2" onClick={(e) => e.stopPropagation()}>
+          {/* Bé Đến Đây! Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCardClick();
+              if (onStickerBurst) onStickerBurst(e);
+            }}
+            className="inline-flex items-center justify-center gap-1 w-full py-2 px-2 rounded-xl text-[10.5px] font-extrabold text-[#5C3D4F] bg-gradient-to-r from-[#FFB6C1] to-[#FCE7F3] hover:from-[#FFC2D1] hover:to-[#FDF2F8] shadow-xs hover:shadow-[#FFB6C1]/50 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer uppercase tracking-wider text-center pointer-events-auto border border-[#FFA4B5]/30"
+          >
+            <Sparkles size={12} className="text-[#5C3D4F]" />
+            <span>Bé Đến Đây!</span>
+          </button>
 
           {/* PLOT button */}
           {p.plotUrl ? (
@@ -285,9 +324,9 @@ export function PromptCard({
                 e.stopPropagation();
                 if (onStickerBurst) onStickerBurst(e);
               }}
-              className="inline-flex items-center justify-center gap-1.5 w-full py-2 px-4 rounded-xl text-xs font-extrabold text-[#5C3D4F] bg-gradient-to-r from-[#FFD4F3] via-[#FFD4F3] to-[#D9FFE8] hover:from-[#FFE0F6] hover:via-[#FFE0F6] hover:to-[#E4FFF0] shadow-sm hover:shadow-[#FFD4F3]/50 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer mb-2 uppercase tracking-wider text-center"
+              className="inline-flex items-center justify-center gap-1 w-full py-2 px-2 rounded-xl text-[10.5px] font-extrabold text-[#5C3D4F] bg-gradient-to-r from-[#FFD4F3] via-[#FFD4F3] to-[#D9FFE8] hover:from-[#FFE0F6] hover:via-[#FFE0F6] hover:to-[#E4FFF0] shadow-xs hover:shadow-[#FFD4F3]/50 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer uppercase tracking-wider text-center pointer-events-auto"
             >
-              <BookOpen size={14} className="text-[#5C3D4F]" />
+              <BookOpen size={12} className="text-[#5C3D4F]" />
               <span>PLOT</span>
             </a>
           ) : (
@@ -297,9 +336,9 @@ export function PromptCard({
               onClick={(e) => {
                 e.stopPropagation();
               }}
-              className="inline-flex items-center justify-center gap-1.5 w-full py-2 px-4 rounded-xl text-xs font-semibold text-purple-300/50 dark:text-purple-400/30 border border-purple-900/10 dark:border-purple-950/30 cursor-not-allowed opacity-60 mb-2 uppercase tracking-wider text-center bg-transparent"
+              className="inline-flex items-center justify-center gap-1 w-full py-2 px-2 rounded-xl text-[10.5px] font-semibold text-purple-300/40 dark:text-purple-400/20 border border-purple-900/10 dark:border-purple-950/20 cursor-not-allowed opacity-60 uppercase tracking-wider text-center bg-transparent pointer-events-auto"
             >
-              <BookOpen size={14} />
+              <BookOpen size={12} />
               <span>PLOT</span>
             </button>
           )}
@@ -308,7 +347,7 @@ export function PromptCard({
         {/* Tag badges cloud & Elegant Rose Quartz/Blush Vote Box footer */}
         <div className="flex items-center justify-between gap-4 mt-4 pt-3 border-t border-gray-100 dark:border-gray-850">
           {/* Tag badges cloud left aligned */}
-          <div className="flex flex-wrap gap-1.5 flex-1 max-w-[70%]">
+          <div className="flex flex-wrap gap-1.5 flex-1 max-w-[70%] pointer-events-none">
             {p.tags.map(t => (
               <span 
                 key={t}
@@ -339,7 +378,7 @@ export function PromptCard({
                   isLevelUp 
                     ? "border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.5)]" 
                     : "border border-[#F2AFBC]/50 hover:border-[#F9CBD6]"
-                } shadow-xl text-center transition-all cursor-pointer min-w-[88px] z-10`}
+                } shadow-xl text-center transition-all cursor-pointer min-w-[88px] z-10 pointer-events-auto`}
               >
                 <motion.span 
                   animate={animateVote ? { scale: [1, 1.25, 0.95, 1], y: [0, -4, 2, 0] } : {}}

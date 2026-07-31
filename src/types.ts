@@ -27,6 +27,9 @@ export interface Prompt {
   passwordFailGifUrl?: string;
   passwordFailSoundUrl?: string;
   plotUrl?: string;
+  updatedAt?: string;
+  isNew?: boolean;
+  views?: number;
 }
 
 export interface MedicalRecord {

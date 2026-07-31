@@ -19,7 +19,10 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     tags: ["Đẹp trai", "Nghiêm khắc", "Cưng chiều"],
     hasPassword: false,
     votes: 0,
-    khoa: "Tâm thần"
+    khoa: "Tâm thần",
+    views: 1240,
+    updatedAt: "2 giờ trước",
+    isNew: true
   },
   {
     id: 2,
@@ -31,7 +34,9 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     tags: ["Dịu dàng", "Tận tâm", "Ngọt ngào"],
     hasPassword: false,
     votes: 0,
-    khoa: "Thần kinh"
+    khoa: "Thần kinh",
+    views: 852,
+    updatedAt: "1 ngày trước"
   },
   {
     id: 3,
@@ -45,7 +50,10 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     hint: "Tên tài khoản admin viết liền, không dấu (charmainennie8)",
     password: "charmainennie8",
     votes: 0,
-    khoa: "Tâm thần"
+    khoa: "Tâm thần",
+    views: 2450,
+    updatedAt: "3 giờ trước",
+    isNew: true
   },
   {
     id: 4,
@@ -57,7 +65,9 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     tags: ["Tim đập nhanh", "Ngược luyến", "Chữa lành"],
     hasPassword: false,
     votes: 0,
-    khoa: "Tim mạch"
+    khoa: "Tim mạch",
+    views: 612,
+    updatedAt: "3 ngày trước"
   }
 ];
 
