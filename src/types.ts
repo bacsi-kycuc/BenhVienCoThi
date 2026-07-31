@@ -26,6 +26,7 @@ export interface Prompt {
   passwordFailLimit?: number;
   passwordFailGifUrl?: string;
   passwordFailSoundUrl?: string;
+  plotUrl?: string;
 }
 
 export interface MedicalRecord {
@@ -36,4 +37,16 @@ export interface MedicalRecord {
   note: string;
   symptoms: string[];
   date: string;
+}
+
+export interface Sticker {
+  id: string;
+  x: number;
+  y: number;
+  emoji: string;
+  rotation: number;
+  scale: number;
+  driftX: number;
+  driftY: number;
+  stickerIndex?: number;
 }

@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   PromptCategory, 
   Prompt, 
-  MedicalRecord 
+  MedicalRecord,
+  Sticker
 } from "./types";
 import { 
   DEFAULT_CATEGORIES, 
-  DEFAULT_PROMPTS, 
   PHD_SAMPLES,
   verifyHash 
 } from "./data";
@@ -45,6 +45,7 @@ import {
   Heart
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { PastelStickerComponents } from "./components/PastelStickers";
 
 import { 
   collection, 
@@ -67,6 +68,7 @@ interface PromptCardProps {
   onEdit: (p: Prompt) => void;
   onDelete: (id: number) => void;
   onPasswordFail: (showTroll: boolean, gifUrl?: string, soundUrl?: string) => void;
+  onStickerBurst?: (e: React.MouseEvent) => void;
 }
 
 export function PromptCard({
@@ -78,7 +80,8 @@ export function PromptCard({
   onVote,
   onEdit,
   onDelete,
-  onPasswordFail
+  onPasswordFail,
+  onStickerBurst
 }: PromptCardProps) {
   const [localFailCount, setLocalFailCount] = useState(0);
   const [showLocalUnlock, setShowLocalUnlock] = useState(false);
@@ -271,6 +274,35 @@ export function PromptCard({
           <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-4 line-clamp-3 font-medium">
             {p.description}
           </p>
+
+          {/* PLOT button */}
+          {p.plotUrl ? (
+            <a
+              href={p.plotUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onStickerBurst) onStickerBurst(e);
+              }}
+              className="inline-flex items-center justify-center gap-1.5 w-full py-2 px-4 rounded-xl text-xs font-extrabold text-[#5C3D4F] bg-gradient-to-r from-[#FFD4F3] via-[#FFD4F3] to-[#D9FFE8] hover:from-[#FFE0F6] hover:via-[#FFE0F6] hover:to-[#E4FFF0] shadow-sm hover:shadow-[#FFD4F3]/50 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer mb-2 uppercase tracking-wider text-center"
+            >
+              <BookOpen size={14} className="text-[#5C3D4F]" />
+              <span>PLOT</span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              disabled
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+              className="inline-flex items-center justify-center gap-1.5 w-full py-2 px-4 rounded-xl text-xs font-semibold text-purple-300/50 dark:text-purple-400/30 border border-purple-900/10 dark:border-purple-950/30 cursor-not-allowed opacity-60 mb-2 uppercase tracking-wider text-center bg-transparent"
+            >
+              <BookOpen size={14} />
+              <span>PLOT</span>
+            </button>
+          )}
         </div>
 
         {/* Tag badges cloud & Elegant Rose Quartz/Blush Vote Box footer */}
@@ -441,6 +473,64 @@ export function PromptCard({
 export default function App() {
   // Screens & Navigation
   const [screen, setScreen] = useState<"welcome" | "app">("welcome");
+
+  // Cute stickers burst effect state
+  const [stickers, setStickers] = useState<Sticker[]>([]);
+
+  const triggerStickerBurstAt = (clientX: number, clientY: number) => {
+    const count = 5 + Math.floor(Math.random() * 4); // 5-8 stickers (dainty and sweet, not too cluttered)
+    const newStickers: Sticker[] = [];
+    
+    for (let i = 0; i < count; i++) {
+      const id = `${Date.now()}-${Math.random()}-${i}`;
+      // Random drift parameters matching user specs: floats upwards (y decreases 80px - 140px), slight left/right drift (-40px to 40px)
+      const driftY = -(80 + Math.random() * 60); 
+      const driftX = (Math.random() - 0.5) * 80; 
+      const rotation = (Math.random() - 0.5) * 60; // Cute tilt (-30 to 30 degrees) for perfect sticker look
+      const scale = 0.5 + Math.random() * 0.4; // 0.5 to 0.9 scale (dainty and sweet)
+
+      const stickerIndex = Math.floor(Math.random() * PastelStickerComponents.length);
+
+      newStickers.push({
+        id,
+        x: clientX,
+        y: clientY,
+        emoji: "", // fallback
+        rotation,
+        scale,
+        driftX,
+        driftY,
+        stickerIndex,
+      });
+
+      // Automatically remove sticker from state after 1.2s to prevent memory leaks
+      setTimeout(() => {
+        setStickers((prev) => prev.filter((s) => s.id !== id));
+      }, 1300);
+    }
+
+    setStickers((prev) => [...prev, ...newStickers]);
+  };
+
+  const triggerStickerBurst = (e: React.MouseEvent) => {
+    triggerStickerBurstAt(e.clientX, e.clientY);
+  };
+
+  // Global click listener to capture any click or tap on the page
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      // If clientX and clientY are 0, it might be a programmatically triggered click without coordinates, skip it
+      if (e.clientX === 0 && e.clientY === 0) return;
+      
+      // Check if click was on elements with pointer-events-none or special cases, otherwise trigger
+      triggerStickerBurstAt(e.clientX, e.clientY);
+    };
+
+    window.addEventListener("click", handleGlobalClick, { passive: true });
+    return () => {
+      window.removeEventListener("click", handleGlobalClick);
+    };
+  }, []);
   
   // Theme State
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -454,7 +544,7 @@ export default function App() {
 
   // Core Data Lists
   const [categories, setCategories] = useState<PromptCategory[]>(DEFAULT_CATEGORIES);
-  const [prompts, setPrompts] = useState<Prompt[]>(DEFAULT_PROMPTS);
+  const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [phdRecords, setPhdRecords] = useState<MedicalRecord[]>(() => {
     try {
       const fallback = localStorage.getItem("offline_phd_records");
@@ -597,23 +687,21 @@ export default function App() {
 
     // 2. Subscribe to Prompts
     const unsubPrompts = onSnapshot(collection(db, "prompts"), (snapshot) => {
-      if (snapshot.empty) {
-        // Seeding initial prompts
-        DEFAULT_PROMPTS.forEach(async (p) => {
-          try {
-            await setDoc(doc(db, "prompts", String(p.id)), p);
-          } catch (err) {
-            handleFirestoreError(err, OperationType.WRITE, `prompts/${p.id}`);
-          }
-        });
-      } else {
-        const list: Prompt[] = [];
-        snapshot.forEach((doc) => {
-          list.push(doc.data() as Prompt);
-        });
-        list.sort((a, b) => b.id - a.id);
-        setPrompts(list);
-      }
+      const list: Prompt[] = [];
+      snapshot.forEach((docSnap) => {
+        const item = docSnap.data() as Prompt;
+        
+        // Exclude and delete sample prompts (IDs 1, 2, 3, 4) from displaying and from database permanently
+        if (item.id === 1 || item.id === 2 || item.id === 3 || item.id === 4) {
+          deleteDoc(doc(db, "prompts", String(item.id)))
+            .catch(err => console.warn("Could not delete legacy sample prompt from Firestore", err));
+          return;
+        }
+        
+        list.push(item);
+      });
+      list.sort((a, b) => b.id - a.id);
+      setPrompts(list);
     }, (err) => {
       if (err instanceof Error && (err.message.includes("Quota") || err.message.includes("quota"))) {
         setDbQuotaError(true);
@@ -783,6 +871,7 @@ export default function App() {
   const [formCategory, setFormCategory] = useState("");
   const [formIcon, setFormIcon] = useState("");
   const [formUrl, setFormUrl] = useState("");
+  const [formPlotUrl, setFormPlotUrl] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formTagsInput, setFormTagsInput] = useState("");
   const [formTags, setFormTags] = useState<string[]>([]);
@@ -845,11 +934,7 @@ export default function App() {
     } catch (e) {
       console.warn("Could not parse votes from localStorage", e);
     }
-    const initial: Record<string, number> = {};
-    DEFAULT_PROMPTS.forEach(p => {
-      initial[String(p.id)] = p.votes || 0;
-    });
-    return initial;
+    return {};
   });
 
   const [votedDates, setVotedDates] = useState<Record<string, string>>(() => {
@@ -1334,6 +1419,7 @@ export default function App() {
     setFormCategory(categories[0]?.id || "");
     setFormIcon("");
     setFormUrl("");
+    setFormPlotUrl("");
     setFormDescription("");
     setFormTags([]);
     setFormTagsInput("");
@@ -1353,6 +1439,7 @@ export default function App() {
     setFormCategory(prompt.category);
     setFormIcon(prompt.icon);
     setFormUrl(prompt.url);
+    setFormPlotUrl(prompt.plotUrl || "");
     setFormDescription(prompt.description);
     setFormTags(prompt.tags || []);
     setFormTagsInput("");
@@ -1386,6 +1473,7 @@ export default function App() {
         category: formCategory,
         icon: formIcon.trim() || "🏥",
         url: formUrl.trim(),
+        plotUrl: formPlotUrl.trim() || "",
         description: formDescription.trim(),
         tags: formTags,
         hasPassword: formHasPassword,
@@ -1407,6 +1495,7 @@ export default function App() {
         category: formCategory,
         icon: formIcon.trim() || "🏥",
         url: formUrl.trim(),
+        plotUrl: formPlotUrl.trim() || "",
         description: formDescription.trim(),
         tags: formTags,
         hasPassword: formHasPassword,
@@ -1424,6 +1513,7 @@ export default function App() {
       setFormName("");
       setFormIcon("");
       setFormUrl("");
+      setFormPlotUrl("");
       setFormDescription("");
       setFormTags([]);
       setFormTagsInput("");
@@ -2370,14 +2460,19 @@ export default function App() {
                     onEdit={triggerEditPrompt}
                     onDelete={deletePrompt}
                     onPasswordFail={handlePasswordFail}
+                    onStickerBurst={triggerStickerBurst}
                   />
                 ))}
 
                 {filteredPrompts.length === 0 && (
                   <div className="col-span-full py-16 text-center text-gray-400">
                     <span className="text-5xl block mb-2">📭</span>
-                    <span className="font-bold text-gray-500">Chưa tìm thấy điều dưỡng viên nào đang trực ca này...</span>
-                    <p className="text-xs text-gray-400 mt-1">Vui lòng thay đổi từ khóa hoặc tìm kiếm trong phân mục khác.</p>
+                    <span className="font-bold text-gray-500">
+                      {prompts.length === 0 ? "Không có điều dưỡng đang làm" : "Chưa tìm thấy điều dưỡng viên nào đang trực ca này..."}
+                    </span>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {prompts.length === 0 ? "Đội ngũ điều dưỡng hiện đang trống hoặc cơ sở dữ liệu đang ngoại tuyến." : "Vui lòng thay đổi từ khóa hoặc tìm kiếm trong phân mục khác."}
+                    </p>
                   </div>
                 )}
 
@@ -2677,6 +2772,19 @@ export default function App() {
                       className="w-full py-2 px-3 rounded-xl border-2 border-pink-100 dark:border-pink-900 bg-white dark:bg-black/30 text-sm font-semibold outline-none focus:border-rose-300"
                     />
                   </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide">
+                    Đường dẫn cốt truyện / Plot URL (Tùy chọn)
+                  </label>
+                  <input
+                    type="url"
+                    value={formPlotUrl}
+                    onChange={(e) => setFormPlotUrl(e.target.value)}
+                    placeholder="https://... (Ví dụ: liên kết cốt truyện hoặc kịch bản chi tiết)"
+                    className="w-full py-2 px-3 rounded-xl border-2 border-pink-100 dark:border-pink-900 bg-white dark:bg-black/30 text-sm font-semibold outline-none focus:border-rose-300"
+                  />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
@@ -4237,6 +4345,53 @@ export default function App() {
       </div>
       
       <ConfettiEffect active={phdConfettiActive} onComplete={() => setPhdConfettiActive(false)} />
+
+      {/* Floating Sticker/Emoji burst effect overlay */}
+      <div className="fixed inset-0 pointer-events-none z-[999999] overflow-hidden">
+        <AnimatePresence>
+          {stickers.map((s) => {
+            const StickerComponent = s.stickerIndex !== undefined ? PastelStickerComponents[s.stickerIndex] : null;
+            return (
+              <motion.div
+                key={s.id}
+                initial={{
+                  opacity: 1,
+                  scale: 0.1,
+                  x: s.x,
+                  y: s.y,
+                  rotate: 0,
+                }}
+                animate={{
+                  opacity: 0,
+                  scale: [0.1, s.scale * 1.3, 0],
+                  x: s.x + s.driftX,
+                  y: s.y + s.driftY,
+                  rotate: s.rotation,
+                }}
+                transition={{
+                  duration: 1.2,
+                  ease: "easeOut",
+                }}
+                style={{
+                  position: "fixed",
+                  left: 0,
+                  top: 0,
+                  transform: "translate(-50%, -50%)", // center on exact click point
+                }}
+                className="select-none pointer-events-none"
+              >
+                {StickerComponent ? (
+                  <div style={{ transform: "scale(0.85)" }}>
+                    <StickerComponent />
+                  </div>
+                ) : (
+                  <span className="text-2xl filter drop-shadow-md">{s.emoji}</span>
+                )}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
 
     </div>
   );

@@ -18,7 +18,7 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     description: "Trưởng khoa tâm thần học lâm sàng. Chuyên khám chữa các triệu chứng mê đắm thể nặng, hoang tưởng đa vũ trụ chatbot và ảo giác ngọt ngào cấp độ cao.",
     tags: ["Đẹp trai", "Nghiêm khắc", "Cưng chiều"],
     hasPassword: false,
-    votes: 185,
+    votes: 0,
     khoa: "Tâm thần"
   },
   {
@@ -30,7 +30,7 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     description: "Nữ điều dưỡng trưởng dịu dàng, chu đáo chuyên lập hồ sơ theo dõi triệu chứng co giật cơ tim nhẹ khi gặp soái ca ảo tưởng.",
     tags: ["Dịu dàng", "Tận tâm", "Ngọt ngào"],
     hasPassword: false,
-    votes: 120,
+    votes: 0,
     khoa: "Thần kinh"
   },
   {
@@ -44,7 +44,7 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     hasPassword: true,
     hint: "Tên tài khoản admin viết liền, không dấu (charmainennie8)",
     password: "charmainennie8",
-    votes: 95,
+    votes: 0,
     khoa: "Tâm thần"
   },
   {
@@ -56,7 +56,7 @@ export const DEFAULT_PROMPTS: Prompt[] = [
     description: "Chuyên khoa điều trị mệt mỏi trái tim khi cày đỏ mắt chờ chương truyện mới của nam chính tổng tài.",
     tags: ["Tim đập nhanh", "Ngược luyến", "Chữa lành"],
     hasPassword: false,
-    votes: 150,
+    votes: 0,
     khoa: "Tim mạch"
   }
 ];
