@@ -48,6 +48,12 @@ service cloud.firestore {
         && data.date is string && data.date.size() <= 100;
     }
 
+    // Config schema validation helper
+    function isValidConfig(data) {
+      return data.keys().hasAll(['enabled'])
+        && data.enabled is bool;
+    }
+
     // Paths matching rules
     match /categories/{categoryId} {
       allow read: if true;
@@ -64,6 +70,12 @@ service cloud.firestore {
     match /phdRecords/{recordId} {
       allow read: if true;
       allow create, update: if isValidMedicalRecord(request.resource.data);
+      allow delete: if true;
+    }
+
+    match /config/{configId} {
+      allow read: if true;
+      allow create, update: if isValidConfig(request.resource.data);
       allow delete: if true;
     }
   }

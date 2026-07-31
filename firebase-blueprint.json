@@ -123,6 +123,18 @@
         }
       },
       "required": ["id", "name", "age", "cat", "note", "symptoms", "date"]
+    },
+    "config": {
+      "title": "Config",
+      "description": "System configurations such as maintenance mode",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether maintenance mode is active"
+        }
+      },
+      "required": ["enabled"]
     }
   },
   "firestore": {
@@ -137,6 +149,10 @@
     "phdRecords": {
       "schema": "medicalRecord",
       "description": "Online database storing registered medical check-in records"
+    },
+    "config": {
+      "schema": "config",
+      "description": "System configuration documents"
     }
   }
 }

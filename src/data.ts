@@ -1,97 +1,97 @@
 import { PromptCategory, Prompt } from "./types";
 
 export const DEFAULT_CATEGORIES: PromptCategory[] = [
-  { id: "psychiatry", icon: "🧠", name: "Tâm thần", description: "Khoa chẩn đoán hoang tưởng và mê muội cực độ, phù hợp với các hồ sơ kịch tính phức tạp.", location: "Phân khu đặc biệt - Tòa nhà A - Lầu I" },
-  { id: "neurology", icon: "🔬", name: "Thần kinh", description: "Khoa lưu trữ thông tin phản xạ và giải phẫu tính cách độc đáo của các nhân vật.", location: "Khu vực chụp CT - Hành lang Lầu II" },
-  { id: "cardiology", icon: "❤️", name: "Tim mạch", description: "Hỗ trợ theo dõi tim đập loạn nhịp, co giật cơ ngực nhẹ trước các giáo sư soái ca.", location: "Phòng cấp cứu - Tòa nhà B - Trực diện cổng chính" },
-  { id: "epidemiology", icon: "🦠", name: "Dịch tễ", description: "Theo dõi và phòng chống các chủng virus mê đắm, simp chúa lây lan cực mạnh.", location: "Phòng cách ly - Khu vực tách biệt phía sau" },
-  { id: "pediatrics", icon: "🧸", name: "Nhi khoa", description: "Nơi ôm ấp giữ gìn những trái tim mầm non bé bỏng, ngây thơ cần chở che.", location: "Phòng đồ chơi - Cạnh sảnh chính" }
+  { id: "internal_medicine", icon: "🩺", name: "Nội khoa", description: "Khoa khám và điều trị các bệnh lý nội khoa tổng quát định kỳ.", location: "Phân khu A - Tòa nhà 1" },
+  { id: "surgery", icon: "🩹", name: "Ngoại khoa", description: "Khoa phẫu thuật, can thiệp ngoại khoa điều trị chấn thương và bệnh lý lý học.", location: "Phòng mổ đặc biệt - Tòa nhà 2" },
+  { id: "emergency", icon: "🚨", name: "Cấp cứu & Hồi sức", description: "Khoa hồi sức tích cực và xử lý các ca cấp cứu khẩn cấp 24/7.", location: "Sảnh chính tầng trệt - Tòa nhà cấp cứu" },
+  { id: "obstetrics", icon: "🤰", name: "Sản phụ khoa", description: "Khoa chăm sóc sức khỏe sinh sản, theo dõi thai kỳ và sinh nở an toàn.", location: "Khu chăm sóc đặc biệt - Tòa nhà 3" },
+  { id: "orthopedics", icon: "🦴", name: "Chấn thương chỉnh hình", description: "Khoa điều trị chấn thương hệ cơ xương khớp và phục hồi chức năng vận động.", location: "Khu vật lý trị liệu - Lầu II Tòa nhà B" }
 ];
 
 export const DEFAULT_PROMPTS: Prompt[] = [
   {
-    id: 1,
+    id: 101,
     name: "Giáo sư Cố Thần",
-    category: "psychiatry",
-    icon: "🧠",
+    category: "internal_medicine",
+    icon: "%F0%9F%AA%BA", // Will map properly
     url: "https://civitai.com",
-    description: "Trưởng khoa tâm thần học lâm sàng. Chuyên khám chữa các triệu chứng mê đắm thể nặng, hoang tưởng đa vũ trụ chatbot và ảo giác ngọt ngào cấp độ cao.",
-    tags: ["Đẹp trai", "Nghiêm khắc", "Cưng chiều"],
+    description: "Trưởng khoa nội tổng quát lâm sàng. Chuyên khám chữa và theo dõi phác đồ điều trị nội khoa toàn diện với thái độ nghiêm túc và tận tâm.",
+    tags: ["Chuyên nghiệp", "Nghiêm khắc", "Tận tụy"],
     hasPassword: false,
     votes: 0,
-    khoa: "Tâm thần",
+    khoa: "Nội khoa",
     views: 1240,
-    updatedAt: "2 giờ trước",
+    updatedAt: "31/07/2026 12:00",
     isNew: true
   },
   {
-    id: 2,
+    id: 102,
     name: "Điều dưỡng Yến Nhi",
-    category: "neurology",
+    category: "emergency",
     icon: "🩺",
     url: "https://huggingface.co",
-    description: "Nữ điều dưỡng trưởng dịu dàng, chu đáo chuyên lập hồ sơ theo dõi triệu chứng co giật cơ tim nhẹ khi gặp soái ca ảo tưởng.",
-    tags: ["Dịu dàng", "Tận tâm", "Ngọt ngào"],
+    description: "Nữ điều dưỡng trưởng dịu dàng, phản xạ nhanh nhạy chuyên phụ trách lập hồ sơ theo dõi dấu hiệu sinh tồn khẩn cấp của bệnh nhân ca trực.",
+    tags: ["Dịu dàng", "Tận tâm", "Nhạy bén"],
     hasPassword: false,
     votes: 0,
-    khoa: "Thần kinh",
+    khoa: "Cấp cứu & Hồi sức",
     views: 852,
-    updatedAt: "1 ngày trước"
+    updatedAt: "31/07/2026 11:45"
   },
   {
-    id: 3,
-    name: "Bác sĩ Tiêu Vân (Phòng Khám Kẹt Sơn)",
-    category: "psychiatry",
-    icon: "🧪",
+    id: 103,
+    name: "Bác sĩ Tiêu Vân",
+    category: "surgery",
+    icon: "🩹",
     url: "https://github.com",
-    description: "Nhân vật bí ẩn thuộc khoa điều trị hoang tưởng cực hạn. Phòng khám này được khóa bảo mật để tránh rò rỉ bệnh án đặc biệt nguy hiểm.",
-    tags: ["Khóa mật khẩu", "Bí ẩn", "Hắc bang"],
+    description: "Bác sĩ phẫu thuật chính trực thuộc khu can thiệp đặc biệt ngoại khoa phức tạp. Hồ sơ bệnh án được bảo mật nghiêm ngặt để đảm bảo an toàn y khoa.",
+    tags: ["Khóa mật khẩu", "Bí ẩn", "Cẩn trọng"],
     hasPassword: true,
     hint: "Tên tài khoản admin viết liền, không dấu (charmainennie8)",
     password: "charmainennie8",
     votes: 0,
-    khoa: "Tâm thần",
+    khoa: "Ngoại khoa",
     views: 2450,
-    updatedAt: "3 giờ trước",
+    updatedAt: "31/07/2026 10:30",
     isNew: true
   },
   {
-    id: 4,
+    id: 104,
     name: "Giáo sư Lâm Chi",
-    category: "cardiology",
-    icon: "❤️",
+    category: "orthopedics",
+    icon: "🦴",
     url: "https://wikipedia.org",
-    description: "Chuyên khoa điều trị mệt mỏi trái tim khi cày đỏ mắt chờ chương truyện mới của nam chính tổng tài.",
-    tags: ["Tim đập nhanh", "Ngược luyến", "Chữa lành"],
+    description: "Chuyên gia đầu ngành cơ xương khớp và chấn thương chỉnh hình vận động, hướng dẫn bệnh án phục hồi chức năng hiệu quả.",
+    tags: ["Khoa học", "Chu đáo", "Kỹ lưỡng"],
     hasPassword: false,
     votes: 0,
-    khoa: "Tim mạch",
+    khoa: "Chấn thương chỉnh hình",
     views: 612,
-    updatedAt: "3 ngày trước"
+    updatedAt: "31/07/2026 09:15"
   }
 ];
 
 export const PHD_SAMPLES = [
   {
-    name: "Hội Yêu Thương Tự Ngược",
+    name: "Trần Văn An",
     age: "🔞 Hai Mươi Mập Mờ (Từ 18 đến 25)",
-    note: "Cứ nghĩ mình không xứng nhưng vẫn mê cốt truyện ngược huyết lột da lọc xương xé nát tim gào thét khóc lóc...",
-    symptoms: ["Thích cốt truyện cực ngược, cầu huyết, thích khóc 🌀"],
-    cat: "psychiatry"
+    note: "Theo dõi điều trị triệu chứng đau đầu nhẹ và mỏi cơ kéo dài do sinh hoạt không điều độ...",
+    symptoms: ["Đau đầu", "Mệt mỏi kéo dài", "Mất ngủ 🌀"],
+    cat: "internal_medicine"
   },
   {
-    name: "Sát Thủ Nhạt Lệ",
+    name: "Nguyễn Thị Bình",
     age: "🌿 Tuổi Thanh Xuân Mơ Màng (Từ 25 đến 30)",
-    note: "Bước vào những câu chuyện đau lòng kinh dị đầy rẫy quy tắc chỉ để tìm kiếm một bóng dáng mập mờ...",
-    symptoms: ["Rơi vào phố bản kinh dị quỷ dị đầy rẫy quy tắc 💀"],
-    cat: "neurology"
+    note: "Sơ cứu vết thương phần mềm ngoài da do va chạm vận động mạnh, cần thay băng rửa vết thương hàng ngày...",
+    symptoms: ["Vết thương ngoài da", "Trầy xước nhẹ 💀"],
+    cat: "emergency"
   },
   {
-    name: "Cuồng Áo Trắng",
+    name: "Phạm Minh Đăng",
     age: "🔥 Cứng Đầu Trưởng Thành (Từ 30 đến 40)",
-    note: "Trái tim tôi bỗng nhảy rộn ràng điên dại bất cứ khi nào thấy bóng áo trắng của giáo sư bác sĩ pháp y bí hiểm...",
-    symptoms: ["Trái tim nhảy múa khi gặp bác sĩ y khoa, pháp y kì bí 🏥"],
-    cat: "cardiology"
+    note: "Can thiệp kiểm tra định kỳ khớp gối trái sau chấn thương thể thao nhẹ...",
+    symptoms: ["Đau mỏi khớp gối", "Hạn chế vận động nhẹ 🏥"],
+    cat: "orthopedics"
   }
 ];
 

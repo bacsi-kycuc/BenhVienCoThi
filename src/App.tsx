@@ -8,6 +8,7 @@ import {
 import { 
   DEFAULT_CATEGORIES, 
   PHD_SAMPLES,
+  DEFAULT_PROMPTS,
   verifyHash 
 } from "./data";
 import { 
@@ -43,7 +44,12 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
-  Heart
+  Heart,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ArrowUp
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { PastelStickerComponents } from "./components/PastelStickers";
@@ -57,6 +63,16 @@ import {
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
 import { ConfettiEffect } from "./components/ConfettiEffect";
+
+const formatDate = (date: Date) => {
+  const pad = (num: number) => String(num).padStart(2, "0");
+  const d = pad(date.getDate());
+  const m = pad(date.getMonth() + 1);
+  const y = date.getFullYear();
+  const h = pad(date.getHours());
+  const min = pad(date.getMinutes());
+  return `${h}:${min}, ${d}/${m}/${y}`;
+};
 
 interface PromptCardProps {
   key?: React.Key;
@@ -144,6 +160,14 @@ export function PromptCard({
   const isLocked = !!p.hasPassword;
 
   const handleCardClick = () => {
+    // Increment local/Firestore views accurately
+    const updatedPrompt = {
+      ...p,
+      views: (p.views ?? 0) + 1
+    };
+    setDoc(doc(db, "prompts", String(p.id)), updatedPrompt)
+      .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${p.id}`));
+
     if (isLocked) {
       setShowLocalUnlock(true);
       setEnteredUnlockPass("");
@@ -159,6 +183,14 @@ export function PromptCard({
     
     if (enteredPass === realPass || enteredPass === "charmainennie8") {
       setUnlockError(false);
+      
+      const updatedPrompt = {
+        ...p,
+        views: (p.views ?? 0) + 1
+      };
+      setDoc(doc(db, "prompts", String(p.id)), updatedPrompt)
+        .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${p.id}`));
+
       window.open(p.url, "_blank", "noreferrer");
       setShowLocalUnlock(false);
       setEnteredUnlockPass("");
@@ -701,6 +733,9 @@ export default function App() {
   useEffect(() => {
     // 1. Subscribe to Categories
     const unsubCats = onSnapshot(collection(db, "categories"), (snapshot) => {
+      const excludedIds = ["psychiatry", "neurology", "cardiology", "epidemiology", "pediatrics"];
+      const excludedNames = ["Tâm thần", "Thần kinh", "Tim mạch", "Dịch tễ", "Nhi khoa"];
+
       if (snapshot.empty) {
         // Seeding initial categories
         DEFAULT_CATEGORIES.forEach(async (cat) => {
@@ -712,9 +747,27 @@ export default function App() {
         });
       } else {
         const list: PromptCategory[] = [];
-        snapshot.forEach((doc) => {
-          list.push(doc.data() as PromptCategory);
+        snapshot.forEach((docSnap) => {
+          const cat = docSnap.data() as PromptCategory;
+          if (excludedIds.includes(cat.id) || excludedNames.includes(cat.name)) {
+            // Delete legacy sample categories permanently from user's database
+            deleteDoc(doc(db, "categories", docSnap.id))
+              .catch(err => console.warn("Could not delete legacy category", err));
+          } else {
+            list.push(cat);
+          }
         });
+
+        // If they all got deleted and lists became empty, re-seed standard clinical ones
+        if (list.length === 0) {
+          DEFAULT_CATEGORIES.forEach(async (cat) => {
+            try {
+              await setDoc(doc(db, "categories", cat.id), cat);
+            } catch (err) {
+              handleFirestoreError(err, OperationType.WRITE, `categories/${cat.id}`);
+            }
+          });
+        }
         setCategories(list);
       }
     }, (err) => {
@@ -727,11 +780,18 @@ export default function App() {
     // 2. Subscribe to Prompts
     const unsubPrompts = onSnapshot(collection(db, "prompts"), (snapshot) => {
       const list: Prompt[] = [];
+      const excludedCats = ["psychiatry", "neurology", "cardiology", "epidemiology", "pediatrics"];
+      const excludedKhoas = ["Tâm thần", "Thần kinh", "Tim mạch", "Dịch tễ", "Nhi khoa"];
+
       snapshot.forEach((docSnap) => {
         const item = docSnap.data() as Prompt;
         
-        // Exclude and delete sample prompts (IDs 1, 2, 3, 4) from displaying and from database permanently
-        if (item.id === 1 || item.id === 2 || item.id === 3 || item.id === 4) {
+        // Exclude and delete sample prompts or those belonging to legacy categories
+        if (
+          item.id === 1 || item.id === 2 || item.id === 3 || item.id === 4 ||
+          excludedCats.includes(item.category) ||
+          excludedKhoas.includes(item.khoa)
+        ) {
           deleteDoc(doc(db, "prompts", String(item.id)))
             .catch(err => console.warn("Could not delete legacy sample prompt from Firestore", err));
           return;
@@ -740,6 +800,17 @@ export default function App() {
         list.push(item);
       });
       list.sort((a, b) => b.id - a.id);
+
+      // If list is empty, seed standard clinical prompts
+      if (list.length === 0) {
+        DEFAULT_PROMPTS.forEach(async (p) => {
+          try {
+            await setDoc(doc(db, "prompts", String(p.id)), p);
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, `prompts/${p.id}`);
+          }
+        });
+      }
       setPrompts(list);
     }, (err) => {
       if (err instanceof Error && (err.message.includes("Quota") || err.message.includes("quota"))) {
@@ -774,15 +845,15 @@ export default function App() {
           let rawCat = (data.cat || "").trim();
           let normalizedCat = rawCat.toLowerCase();
           if (normalizedCat === "tâm thần" || normalizedCat === "psychiatry" || rawCat.includes("Tâm")) {
-            normalizedCat = "psychiatry";
+            normalizedCat = "internal_medicine";
           } else if (normalizedCat === "thần kinh" || normalizedCat === "neurology" || rawCat.includes("Thần")) {
-            normalizedCat = "neurology";
+            normalizedCat = "emergency";
           } else if (normalizedCat === "tim mạch" || normalizedCat === "cardiology" || rawCat.includes("Tim")) {
-            normalizedCat = "cardiology";
+            normalizedCat = "orthopedics";
           } else if (normalizedCat === "dịch tễ" || normalizedCat === "epidemiology" || rawCat.includes("Dịch")) {
-            normalizedCat = "epidemiology";
+            normalizedCat = "emergency";
           } else if (normalizedCat === "nhi khoa" || normalizedCat === "pediatrics" || rawCat.includes("Nhi")) {
-            normalizedCat = "pediatrics";
+            normalizedCat = "emergency";
           } else {
             normalizedCat = rawCat; // preserve other user entries
           }
@@ -833,10 +904,22 @@ export default function App() {
       handleFirestoreError(err, OperationType.LIST, "phdRecords");
     });
 
+    // 4. Subscribe to Maintenance Mode State
+    const unsubMaintenance = onSnapshot(doc(db, "config", "maintenance"), (snapshot) => {
+      if (snapshot.exists()) {
+        setIsMaintenance(!!snapshot.data().enabled);
+      } else {
+        setIsMaintenance(false);
+      }
+    }, (err) => {
+      console.warn("Failed to listen to maintenance mode config:", err);
+    });
+
     return () => {
       unsubCats();
       unsubPrompts();
       unsubRecords();
+      unsubMaintenance();
     };
   }, []);
 
@@ -844,6 +927,36 @@ export default function App() {
   const [activeGenre, setActiveGenre] = useState<string>("all");
   const [mainSearchQuery, setMainSearchQuery] = useState<string>(" ");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [catPage, setCatPage] = useState<number>(1);
+  const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
+
+  // Scroll to top visibility and click handler
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowScrollTop(true);
+      } else {
+        setShowScrollTop(false);
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
+  };
+
+  // Reset pagination to first page when filtering conditions change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [mainSearchQuery, activeGenre, selectedTag]);
 
   // Background Settings
   const [bgWelcome, setBgWelcome] = useState<string | null>(() => {
@@ -887,6 +1000,7 @@ export default function App() {
   const [addPromptOpen, setAddPromptOpen] = useState(false);
   const [editPromptId, setEditPromptId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isMaintenance, setIsMaintenance] = useState<boolean>(false);
   const [settingsTab, setSettingsTab] = useState<"general" | "categories" | "about" | "account" | "links">("general");
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [phdOpen, setPhdOpen] = useState(false);
@@ -1521,7 +1635,9 @@ export default function App() {
         passwordFailLimit: formHasPassword ? formPasswordFailLimit : 5,
         passwordFailGifUrl: formHasPassword ? formPasswordFailGifUrl.trim() : "",
         passwordFailSoundUrl: formHasPassword ? formPasswordFailSoundUrl.trim() : "",
-        votes: oldPrompt ? (oldPrompt.votes ?? 0) : 0
+        votes: oldPrompt ? (oldPrompt.votes ?? 0) : 0,
+        views: oldPrompt ? (oldPrompt.views ?? 0) : 0,
+        updatedAt: formatDate(new Date())
       };
       setDoc(doc(db, "prompts", String(editPromptId)), updatedPrompt)
         .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${editPromptId}`));
@@ -1543,7 +1659,10 @@ export default function App() {
         passwordFailLimit: formHasPassword ? formPasswordFailLimit : 5,
         passwordFailGifUrl: formHasPassword ? formPasswordFailGifUrl.trim() : "",
         passwordFailSoundUrl: formHasPassword ? formPasswordFailSoundUrl.trim() : "",
-        votes: 0 // New nurse starts with exactly 0 votes
+        votes: 0, // New nurse starts with exactly 0 votes
+        views: 0,
+        updatedAt: formatDate(new Date()),
+        isNew: true
       };
       setDoc(doc(db, "prompts", String(promptId)), newPrompt)
         .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${promptId}`));
@@ -1925,8 +2044,15 @@ export default function App() {
           backgroundImage: screen === "welcome" 
             ? (bgWelcome ? `url(${bgWelcome})` : (darkMode ? "linear-gradient(135deg, #2D141A 0%, #1E0C10 50%, #120507 100%)" : "linear-gradient(135deg, #D4C1C9 0%, #C3AFB7 50%, #B29DA5 100%)"))
             : (bgApp ? `url(${bgApp})` : "none"),
-          opacity: screen === "app" && !bgApp ? 0 : 1
+          opacity: screen === "app" && !bgApp ? 0 : 1,
+          filter: darkMode ? "blur(1px) brightness(0.55) saturate(0.85)" : "blur(1px) brightness(0.88) saturate(0.9)",
+          transform: "scale(1.01)"
         }}
+      />
+
+      {/* SEMI-TRANSPARENT TINT OVERLAY FOR MAXIMUM READABILITY AND TEXT SHIELDING */}
+      <div 
+        className="fixed inset-0 pointer-events-none z-0 bg-white/15 dark:bg-[#120B0D]/35 transition-all duration-500"
       />
 
       {/* THREE DYNAMIC AMBIENT GLOWING ORBS FOR DEPTH */}
@@ -1992,9 +2118,95 @@ export default function App() {
       )}
 
       {/* ========================================== */}
+      {/* MAINTENANCE SCREEN                         */}
+      {/* ========================================== */}
+      {isMaintenance && (
+        <div className="relative min-h-screen flex flex-col justify-between items-center px-6 py-12 z-20">
+          <div className="w-full max-w-5xl flex justify-end items-center gap-3">
+            {/* Admin Helper Controls */}
+            {isLoggedIn ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  className="px-4 py-2 bg-[#A55166] hover:bg-[#A55166]/90 text-white rounded-xl font-bold text-xs shadow-md shadow-rose-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  ⚙️ Cài đặt hệ thống
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsMaintenance(false);
+                    try {
+                      await setDoc(doc(db, "config", "maintenance"), { enabled: false });
+                    } catch (err) {
+                      console.error("Failed to disable maintenance", err);
+                    }
+                  }}
+                  className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-red-500 hover:text-white rounded-xl font-bold text-xs active:scale-95 transition-all cursor-pointer"
+                >
+                  🔓 Gỡ bảo trì nhanh
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLoginOpen(true)}
+                className="w-10 h-10 flex items-center justify-center bg-white/40 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/60 text-gray-400 hover:text-rose-500 dark:text-gray-600 rounded-full border border-pink-100/20 dark:border-pink-900/10 cursor-pointer transition-all"
+                title="Đăng nhập nhân viên y tế"
+              >
+                🔑
+              </button>
+            )}
+
+            {/* Dark/Light Mode Theme Switcher */}
+            <button 
+              type="button"
+              onClick={() => setDarkMode(!darkMode)}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-rose-200/30 dark:bg-pink-950/45 text-amber-500 hover:scale-110 active:scale-95 transition-all text-lg shadow-sm border border-pink-300/20 cursor-pointer"
+              title="Thay đổi màu nền"
+            >
+              {darkMode ? "☀️" : "🌙"}
+            </button>
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="relative max-w-lg w-full bg-white/85 dark:bg-[#1E151A]/85 backdrop-blur-md rounded-3xl p-8 md:p-10 border-2 border-pink-100/70 dark:border-pink-950/40 shadow-2xl flex flex-col items-center text-center z-10 select-none my-auto"
+          >
+            {/* Cute emoticon container with slow pulse and float animation */}
+            <div className="px-4 py-2.5 rounded-full bg-rose-50/80 dark:bg-rose-950/30 flex items-center justify-center border border-rose-150 dark:border-rose-900/50 shadow-sm mb-6 relative hover:scale-105 transition-transform duration-300">
+              <span className="text-lg font-bold text-rose-500 dark:text-rose-300 tracking-wider font-sans select-none">
+                ദ്ദി◝ ⩊ ◜.ᐟ
+              </span>
+              <div className="absolute -inset-1 rounded-full border border-rose-300/35 dark:border-rose-700/35 opacity-40 animate-ping" />
+            </div>
+
+            <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#A55166] dark:text-[#E89EAE] bg-rose-50/50 dark:bg-rose-950/40 border border-rose-100/60 dark:border-rose-900/30 px-3 py-1 rounded-full mb-4">
+              Thông Báo Từ Viện Trưởng
+            </span>
+
+            <p className="text-sm text-gray-600 dark:text-gray-300 font-medium leading-relaxed max-w-md">
+              Viện trưởng đang nghiêm khắc huấn luyện các điều dưỡng để nâng cao chất lượng chữa bệnh. Vui lòng quay lại sau.
+            </p>
+          </motion.div>
+
+
+
+          <div className="w-full max-w-5xl flex justify-start items-center">
+            <p className="text-[10px] sm:text-xs text-rose-950/50 dark:text-rose-100/45 font-mono tracking-wide">
+              © 2026 Hospital Zone. All rights reserved.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
       {/* WELCOME SCREEN                             */}
       {/* ========================================== */}
-      {screen === "welcome" && (
+      {screen === "welcome" && !isMaintenance && (
         <div className="relative min-h-screen flex flex-col justify-between items-center px-6 py-12 z-20">
           
           {/* Top navigation row - contains only the top-right controls */}
@@ -2092,7 +2304,7 @@ export default function App() {
       {/* ========================================== */}
       {/* APP MAIN VIEW                              */}
       {/* ========================================== */}
-      {screen === "app" && (
+      {screen === "app" && !isMaintenance && (
         <div className="relative min-h-screen flex flex-col z-20 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
           
           {/* HEADER BAR */}
@@ -2259,12 +2471,55 @@ export default function App() {
           {/* SƠ ĐỒ PHÒNG BỆNH (Nằm ngang toàn màn hình ngay dưới banner web) */}
           <div className="bg-white/75 dark:bg-[#1E2533]/85 backdrop-blur-md rounded-2xl p-5 border-2 border-pink-100 dark:border-pink-950/40 shadow-lg flex flex-col gap-4 mb-8 select-none">
             <div className="flex items-center justify-between border-b pb-3 border-pink-100 dark:border-pink-950/30">
-              <span className="text-xs font-extrabold uppercase tracking-wider text-rose-800 dark:text-rose-300">
-                📋 Sơ đồ phòng bệnh
-              </span>
-              <span className="text-[10px] font-bold text-rose-500 dark:text-rose-400 bg-rose-50 dark:bg-rose-950 px-2.5 py-0.5 rounded-full border border-rose-100 dark:border-rose-900">
-                {categories.length} phòng
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-rose-800 dark:text-rose-300">
+                  📋 Sơ đồ phòng bệnh
+                </span>
+                <span className="text-[10px] font-bold text-rose-500 dark:text-rose-400 bg-rose-50 dark:bg-rose-950 px-2.5 py-0.5 rounded-full border border-rose-100 dark:border-rose-900">
+                  {categories.length} phòng
+                </span>
+              </div>
+
+              {/* Pagination controls for categories */}
+              {(() => {
+                const categoriesPerPage = 5;
+                const totalCatPages = Math.ceil(categories.length / categoriesPerPage);
+                const safeCatPage = Math.max(1, Math.min(catPage, totalCatPages || 1));
+
+                if (totalCatPages <= 1) return null;
+
+                return (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCatPage(p => Math.max(1, p - 1))}
+                      disabled={safeCatPage === 1}
+                      className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                        safeCatPage === 1
+                          ? "opacity-30 pointer-events-none border-gray-100 dark:border-gray-800 text-gray-300 dark:text-gray-600"
+                          : "border-pink-100 dark:border-pink-900/40 bg-white dark:bg-[#1E2533] hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-300 active:scale-95"
+                      }`}
+                      title="Trang trước"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="text-[10px] font-extrabold text-[#A55166] dark:text-[#F7DAE7] font-mono">
+                      {safeCatPage}/{totalCatPages}
+                    </span>
+                    <button
+                      onClick={() => setCatPage(p => Math.min(totalCatPages, p + 1))}
+                      disabled={safeCatPage === totalCatPages}
+                      className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                        safeCatPage === totalCatPages
+                          ? "opacity-30 pointer-events-none border-gray-100 dark:border-gray-800 text-gray-300 dark:text-gray-600"
+                          : "border-pink-100 dark:border-pink-900/40 bg-white dark:bg-[#1E2533] hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-300 active:scale-95"
+                      }`}
+                      title="Trang sau"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Department selections horizontal layout using responsive grid */}
@@ -2294,40 +2549,50 @@ export default function App() {
                 </div>
               </button>
 
-              {categories.map(cat => {
-                const isActive = activeGenre === cat.id;
-                const promptCount = prompts.filter(p => p.category === cat.id).length;
-                const tooltipText = `${cat.name}${cat.location ? `\n📍 Vị trí: ${cat.location}` : ""}${cat.description ? `\n📝 Mô tả: ${cat.description}` : ""}`;
-                
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => {
-                      setActiveGenre(cat.id);
-                      setSelectedTag(null); // Clear tag filter
-                    }}
-                    title={tooltipText}
-                    className={`relative py-3 px-3.5 rounded-2xl font-bold transition-all flex flex-col justify-between border cursor-pointer min-h-[92px] text-left hover:scale-[1.01] active:scale-[0.99] overflow-hidden ${
-                      isActive
-                        ? "text-white border-transparent"
-                        : "bg-white/50 dark:bg-[#1E2533]/50 hover:bg-rose-100/40 dark:hover:bg-rose-950/20 text-gray-700 dark:text-gray-300 border-pink-100/60 dark:border-pink-900/15"
-                    }`}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="activeGenreBg"
-                        className="absolute inset-0 bg-gradient-to-br from-[#A55166] to-[#D38C9D] rounded-2xl z-0 shadow-md shadow-pink-500/20"
-                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      />
-                    )}
-                    <span className="relative z-10 bg-white/20 p-1 rounded-lg text-sm w-fit mb-1">{cat.icon || "📂"}</span>
-                    <div className="relative z-10 flex flex-col min-w-0">
-                      <span className="text-[11px] sm:text-xs truncate font-extrabold leading-tight" title={cat.name}>{cat.name}</span>
-                      <span className="text-[10px] opacity-75 font-medium mt-0.5">{promptCount} điều dưỡng</span>
-                    </div>
-                  </button>
+              {(() => {
+                const categoriesPerPage = 5;
+                const totalCatPages = Math.ceil(categories.length / categoriesPerPage);
+                const safeCatPage = Math.max(1, Math.min(catPage, totalCatPages || 1));
+                const paginatedCategories = categories.slice(
+                  (safeCatPage - 1) * categoriesPerPage,
+                  safeCatPage * categoriesPerPage
                 );
-              })}
+
+                return paginatedCategories.map(cat => {
+                  const isActive = activeGenre === cat.id;
+                  const promptCount = prompts.filter(p => p.category === cat.id).length;
+                  const tooltipText = `${cat.name}${cat.location ? `\n📍 Vị trí: ${cat.location}` : ""}${cat.description ? `\n📝 Mô tả: ${cat.description}` : ""}`;
+                  
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => {
+                        setActiveGenre(cat.id);
+                        setSelectedTag(null); // Clear tag filter
+                      }}
+                      title={tooltipText}
+                      className={`relative py-3 px-3.5 rounded-2xl font-bold transition-all flex flex-col justify-between border cursor-pointer min-h-[92px] text-left hover:scale-[1.01] active:scale-[0.99] overflow-hidden ${
+                        isActive
+                          ? "text-white border-transparent"
+                          : "bg-white/50 dark:bg-[#1E2533]/50 hover:bg-rose-100/40 dark:hover:bg-rose-950/20 text-gray-700 dark:text-gray-300 border-pink-100/60 dark:border-pink-900/15"
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId="activeGenreBg"
+                          className="absolute inset-0 bg-gradient-to-br from-[#A55166] to-[#D38C9D] rounded-2xl z-0 shadow-md shadow-pink-500/20"
+                          transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                        />
+                      )}
+                      <span className="relative z-10 bg-white/20 p-1 rounded-lg text-sm w-fit mb-1">{cat.icon || "📂"}</span>
+                      <div className="relative z-10 flex flex-col min-w-0">
+                        <span className="text-[11px] sm:text-xs truncate font-extrabold leading-tight" title={cat.name}>{cat.name}</span>
+                        <span className="text-[10px] opacity-75 font-medium mt-0.5">{promptCount} điều dưỡng</span>
+                      </div>
+                    </button>
+                  );
+                });
+              })()}
             </div>
 
             {/* Random Treatment Prompt workstation block - Adaptive Horizontal bar */}
@@ -2479,37 +2744,149 @@ export default function App() {
               })()}
 
               {/* MEDICAL INTERACTIVE CARD GRID */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(() => {
+                const itemsPerPage = 10;
+                const totalItems = filteredPrompts.length;
+                const totalPages = Math.ceil(totalItems / itemsPerPage);
+                // Ensure currentPage is within range
+                const safeCurrentPage = Math.max(1, Math.min(currentPage, totalPages || 1));
                 
-                {filteredPrompts.map(p => (
-                  <PromptCard
-                    key={p.id}
-                    p={p}
-                    categories={categories}
-                    votesData={votesData}
-                    votedDates={votedDates}
-                    isLoggedIn={isLoggedIn}
-                    onVote={handleVote}
-                    onEdit={triggerEditPrompt}
-                    onDelete={deletePrompt}
-                    onPasswordFail={handlePasswordFail}
-                    onStickerBurst={triggerStickerBurst}
-                  />
-                ))}
+                const paginatedPrompts = filteredPrompts.slice(
+                  (safeCurrentPage - 1) * itemsPerPage,
+                  safeCurrentPage * itemsPerPage
+                );
 
-                {filteredPrompts.length === 0 && (
-                  <div className="col-span-full py-16 text-center text-gray-400">
-                    <span className="text-5xl block mb-2">📭</span>
-                    <span className="font-bold text-gray-500">
-                      {prompts.length === 0 ? "Không có điều dưỡng đang làm" : "Chưa tìm thấy điều dưỡng viên nào đang trực ca này..."}
-                    </span>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {prompts.length === 0 ? "Đội ngũ điều dưỡng hiện đang trống hoặc cơ sở dữ liệu đang ngoại tuyến." : "Vui lòng thay đổi từ khóa hoặc tìm kiếm trong phân mục khác."}
-                    </p>
-                  </div>
-                )}
+                return (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {paginatedPrompts.map(p => (
+                        <PromptCard
+                          key={p.id}
+                          p={p}
+                          categories={categories}
+                          votesData={votesData}
+                          votedDates={votedDates}
+                          isLoggedIn={isLoggedIn}
+                          onVote={handleVote}
+                          onEdit={triggerEditPrompt}
+                          onDelete={deletePrompt}
+                          onPasswordFail={handlePasswordFail}
+                          onStickerBurst={triggerStickerBurst}
+                        />
+                      ))}
 
-              </div>
+                      {totalItems === 0 && (
+                        <div className="col-span-full py-16 text-center text-gray-400">
+                          <span className="text-5xl block mb-2">📭</span>
+                          <span className="font-bold text-gray-500">
+                            {prompts.length === 0 ? "Không có điều dưỡng đang làm" : "Chưa tìm thấy điều dưỡng viên nào đang trực ca này..."}
+                          </span>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {prompts.length === 0 ? "Đội ngũ điều dưỡng hiện đang trống hoặc cơ sở dữ liệu đang ngoại tuyến." : "Vui lòng thay đổi từ khóa hoặc tìm kiếm trong phân mục khác."}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* PAGINATION CONTROLS */}
+                    {totalPages > 1 && (
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 p-4 bg-white/70 dark:bg-[#1E2533]/80 backdrop-blur-md rounded-2xl border border-pink-100 dark:border-pink-950/40 shadow-md">
+                        <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-semibold">
+                          Hiển thị <span className="text-rose-700 dark:text-rose-300 font-extrabold font-mono">{Math.min(totalItems, (safeCurrentPage - 1) * itemsPerPage + 1)}-{Math.min(totalItems, safeCurrentPage * itemsPerPage)}</span> trong tổng số <span className="text-rose-700 dark:text-rose-300 font-extrabold font-mono">{totalItems}</span> bệnh án
+                        </span>
+
+                        <div className="flex items-center gap-1.5 select-none">
+                          {/* First Page */}
+                          <button
+                            onClick={() => setCurrentPage(1)}
+                            disabled={safeCurrentPage === 1}
+                            className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                              safeCurrentPage === 1
+                                ? "opacity-40 pointer-events-none border-gray-100 dark:border-gray-800 text-gray-300 dark:text-gray-600"
+                                : "border-pink-100 dark:border-pink-900/40 bg-white dark:bg-[#1E2533] hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-300 active:scale-95"
+                            }`}
+                            title="Trang đầu"
+                          >
+                            <ChevronsLeft size={16} />
+                          </button>
+
+                          {/* Prev Page */}
+                          <button
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={safeCurrentPage === 1}
+                            className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                              safeCurrentPage === 1
+                                ? "opacity-40 pointer-events-none border-gray-100 dark:border-gray-800 text-gray-300 dark:text-gray-600"
+                                : "border-pink-100 dark:border-pink-900/40 bg-white dark:bg-[#1E2533] hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-300 active:scale-95"
+                            }`}
+                            title="Trang trước"
+                          >
+                            <ChevronLeft size={16} />
+                          </button>
+
+                          {/* Dynamic page numbers */}
+                          {(() => {
+                            const pages = [];
+                            const maxVisiblePages = 5;
+                            let startPage = Math.max(1, safeCurrentPage - Math.floor(maxVisiblePages / 2));
+                            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                            
+                            if (endPage - startPage + 1 < maxVisiblePages) {
+                              startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                            }
+
+                            for (let i = startPage; i <= endPage; i++) {
+                              const isActive = i === safeCurrentPage;
+                              pages.push(
+                                <button
+                                  key={i}
+                                  onClick={() => setCurrentPage(i)}
+                                  className={`w-9 h-9 flex items-center justify-center rounded-xl font-mono text-xs font-bold transition-all cursor-pointer border ${
+                                    isActive
+                                      ? "bg-gradient-to-br from-[#A55166] to-[#D38C9D] border-transparent text-white shadow-md shadow-pink-500/20"
+                                      : "border-pink-100 dark:border-pink-900/40 bg-white dark:bg-[#1E2533] text-gray-600 dark:text-gray-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:border-pink-200 active:scale-95"
+                                  }`}
+                                >
+                                  {i}
+                                </button>
+                              );
+                            }
+                            return pages;
+                          })()}
+
+                          {/* Next Page */}
+                          <button
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={safeCurrentPage === totalPages}
+                            className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                              safeCurrentPage === totalPages
+                                ? "opacity-40 pointer-events-none border-gray-100 dark:border-gray-800 text-gray-300 dark:text-gray-600"
+                                : "border-pink-100 dark:border-pink-900/40 bg-white dark:bg-[#1E2533] hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-300 active:scale-95"
+                            }`}
+                            title="Trang sau"
+                          >
+                            <ChevronRight size={16} />
+                          </button>
+
+                          {/* Last Page */}
+                          <button
+                            onClick={() => setCurrentPage(totalPages)}
+                            disabled={safeCurrentPage === totalPages}
+                            className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                              safeCurrentPage === totalPages
+                                ? "opacity-40 pointer-events-none border-gray-100 dark:border-gray-800 text-gray-300 dark:text-gray-600"
+                                : "border-pink-100 dark:border-pink-900/40 bg-white dark:bg-[#1E2533] hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-300 active:scale-95"
+                            }`}
+                            title="Trang cuối"
+                          >
+                            <ChevronsRight size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
             </main>
           </div>
@@ -2518,40 +2895,43 @@ export default function App() {
       )}
 
       {/* ========================================== */}
+      {/* BACK TO TOP BUTTON (BOTTOM LEFT CORNER)    */}
+      {/* ========================================== */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 10 }}
+            onClick={scrollToTop}
+            className="fixed bottom-6 left-6 z-40 w-11 h-11 rounded-full bg-white/90 dark:bg-[#1E2533]/90 border-2 border-pink-200 dark:border-pink-950/60 text-[#A55166] dark:text-pink-300 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer backdrop-blur-md"
+            title="Trở lại đầu trang"
+          >
+            <ArrowUp size={18} />
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================== */}
       {/* FLOATING MUSIC BG MARQUEE PLAYER           */}
       {/* ========================================== */}
       {musicUrl && (
         <>
           {playerMinimized ? (
-            /* MINIMIZED VIEW - Compact, saves space on mobile/tablet */
-            <div className="fixed bottom-6 right-6 z-40 bg-white/95 dark:bg-[#1E2533]/95 border-2 border-pink-200 dark:border-pink-950 shadow-xl rounded-2xl p-2 flex items-center gap-2.5 backdrop-blur-md select-none w-fit max-w-[180px]">
-              <button
-                onClick={() => setPlayerPlaying(!playerPlaying)}
-                className={`w-7 h-7 rounded-full bg-gradient-to-r from-rose-400 to-pink-500 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-sm ${playerPlaying ? "animate-spin-slow" : ""}`}
-                title={playerPlaying ? "Tạm dừng" : "Phát nhạc"}
-              >
-                {playerPlaying ? <Pause size={12} /> : <Play size={12} />}
-              </button>
-              
-              <div className="flex flex-col text-left max-w-[80px] overflow-hidden">
-                <span className="text-[9px] font-bold text-rose-700 dark:text-rose-300 truncate block">
-                  {musicTitle}
+            /* MINIMIZED VIEW - Compact circular music note button */
+            <button
+              onClick={() => setPlayerMinimized(false)}
+              className={`fixed bottom-6 right-6 z-40 w-11 h-11 rounded-full bg-gradient-to-br from-[#A55166] to-[#D38C9D] text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer border border-[#D38C9D]/40 ${playerPlaying ? "animate-spin-slow" : ""}`}
+              title={`Mở trình phát nhạc: ${musicTitle}`}
+            >
+              <Music size={18} className={playerPlaying ? "animate-pulse" : ""} />
+              {playerPlaying && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
                 </span>
-                <span className="text-[8px] text-gray-400 dark:text-gray-500">
-                  {playerPlaying ? "Đang phát 🎵" : "Đã dừng 🔇"}
-                </span>
-              </div>
-
-              <div className="flex items-center border-l border-pink-100 dark:border-pink-950 pl-2">
-                <button
-                  onClick={() => setPlayerMinimized(false)}
-                  className="w-5 h-5 rounded-md bg-pink-50 hover:bg-pink-100 dark:bg-pink-950/40 dark:hover:bg-pink-950 text-rose-600 dark:text-pink-300 flex items-center justify-center font-extrabold text-xs hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                  title="Mở rộng trình phát"
-                >
-                  <Plus size={11} />
-                </button>
-              </div>
-            </div>
+              )}
+            </button>
           ) : (
             /* EXPANDED VIEW - Full features */
             <div className="fixed bottom-6 right-6 z-40 bg-white/95 dark:bg-[#1E2533]/95 border-2 border-pink-200 dark:border-pink-950 shadow-xl rounded-2xl p-3 w-[260px] backdrop-blur-md">
@@ -2710,7 +3090,7 @@ export default function App() {
       {/* MODAL: ADD / EDIT PROMPT                   */}
       {/* ========================================== */}
       <AnimatePresence>
-        {addPromptOpen && (
+        {!isMaintenance && addPromptOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4 overflow-y-auto">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
@@ -3182,6 +3562,38 @@ export default function App() {
 
                     <div className="border-t border-pink-100 dark:border-pink-900/40 my-1 font-serif italic" />
 
+                    {/* Maintenance Mode configuration */}
+                    <div>
+                      <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-3">🛠️ CHẾ ĐỘ BẢO TRÌ</span>
+                      <div className="flex items-center justify-between p-4 bg-white dark:bg-black/20 rounded-2xl border border-pink-100 dark:border-pink-900/30">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Kích hoạt bảo trì bệnh viện</span>
+                          <span className="text-[10px] text-gray-400">Khi bật, toàn bộ khách truy cập sẽ thấy bảng thông báo bảo trì.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const newStatus = !isMaintenance;
+                            setIsMaintenance(newStatus);
+                            try {
+                              await setDoc(doc(db, "config", "maintenance"), { enabled: newStatus });
+                            } catch (err) {
+                              handleFirestoreError(err, OperationType.WRITE, "config/maintenance");
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-xl text-xs font-extrabold cursor-pointer transition-all ${
+                            isMaintenance
+                              ? "bg-red-500 text-white shadow-md shadow-red-500/20 animate-pulse"
+                              : "bg-gray-150 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                          }`}
+                        >
+                          {isMaintenance ? "ĐANG BẢO TRÌ" : "HOẠT ĐỘNG"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-pink-100 dark:border-pink-900/40 my-1 font-serif italic" />
+
                     {/* Audio soundtracks setup */}
                     <div>
                       <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-3">🎵 NHẠC NỀN</span>
@@ -3582,7 +3994,7 @@ export default function App() {
       {/* PHIẾU ĐĂNG KÝ CHẨN ĐOÁN (PHD MODAL)             */}
       {/* =============================================== */}
       <AnimatePresence>
-        {phdOpen && (
+        {!isMaintenance && phdOpen && (
           <div className="fixed inset-0 bg-[#1E0A14]/65 backdrop-blur-md z-[8000] flex items-center justify-center p-4">
             <motion.div 
               initial={{ scale: 0.96, opacity: 0, y: 15 }}
@@ -4326,7 +4738,7 @@ export default function App() {
 
       {/* SUCCESS WELCOME TOAST / POPUP */}
       <AnimatePresence>
-        {welcomeToastOpen && (
+        {!isMaintenance && welcomeToastOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
