@@ -2344,15 +2344,11 @@ export default function App() {
               <button 
                 onClick={() => {
                   setPhdOpen(true);
-                  if (isLoggedIn) {
-                    setPhdTab("records");
-                  } else {
-                    setPhdTab("find");
-                  }
+                  setPhdTab("records");
                 }}
                 className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-white text-rose-800 font-extrabold text-xs shadow-md hover:bg-rose-50 transition-all cursor-pointer"
               >
-                📋 {isLoggedIn ? "Kiểm Sổ Khám" : "Lập bệnh án (Sổ khám)"}
+                📋 {isLoggedIn ? "Kiểm Sổ Khám" : "Sổ Khám & Lập Bệnh Án"}
               </button>
 
               {isLoggedIn && (
@@ -4441,11 +4437,55 @@ export default function App() {
                       </select>
                     </div>
 
+                    {/* Quick Category Filter Pills for Sổ Khám */}
+                    <div className="flex gap-1.5 overflow-x-auto pb-1.5 no-scrollbar items-center">
+                      <button
+                        type="button"
+                        onClick={() => setPhdRecordFilter("")}
+                        className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                          phdRecordFilter === ""
+                            ? "bg-[#A55166] text-white shadow-sm"
+                            : "bg-[#F7DAE7]/40 dark:bg-white/10 text-gray-700 dark:text-gray-300 hover:bg-[#F7DAE7]/70"
+                        }`}
+                      >
+                        <span>🗂️ Tất cả ({phdRecords.length})</span>
+                      </button>
+                      {categories.map(c => {
+                        const pCount = phdRecords.filter(r => r.cat === c.id).length;
+                        if (pCount === 0 && phdRecordFilter !== c.id) return null;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setPhdRecordFilter(c.id)}
+                            className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                              phdRecordFilter === c.id
+                                ? "bg-[#A55166] text-white shadow-sm"
+                                : "bg-[#F7DAE7]/40 dark:bg-white/10 text-gray-700 dark:text-gray-300 hover:bg-[#F7DAE7]/70"
+                            }`}
+                          >
+                            <span>{c.icon} {c.name} ({pCount})</span>
+                          </button>
+                        );
+                      })}
+                      {phdRecords.some(r => !r.cat || !categories.some(c => c.id === r.cat)) && (
+                        <button
+                          type="button"
+                          onClick={() => setPhdRecordFilter("unassigned")}
+                          className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                            phdRecordFilter === "unassigned"
+                              ? "bg-[#A55166] text-white shadow-sm"
+                              : "bg-[#F7DAE7]/40 dark:bg-white/10 text-gray-700 dark:text-gray-300 hover:bg-[#F7DAE7]/70"
+                          }`}
+                        >
+                          <span>⚠️ Khác ({phdRecords.filter(r => !r.cat || !categories.some(c => c.id === r.cat)).length})</span>
+                        </button>
+                      )}
+                    </div>
+
                     {/* Records visual render */}
                     <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto pr-1">
                       {(() => {
-                        const isQuerying = phdRecordSearch.trim() !== "";
-                        
                         const finalRecords = phdRecords.filter(r => {
                           if (!r) return false;
                           const name = r.name || "Bệnh nhân ẩn danh";
@@ -4462,19 +4502,6 @@ export default function App() {
                           return matchesSearch && matchesFilter;
                         });
 
-                        // Security: If not signed-in doctor/admin, require exact name or record ID lookup instead of leaking medical list publicly
-                        if (!isLoggedIn && !isQuerying) {
-                          return (
-                            <div className="text-center py-8 text-gray-500 dark:text-gray-400 flex flex-col items-center p-6 bg-[#F7DAE7]/10 dark:bg-black/10 rounded-2xl border border-dashed border-[#E2B4C1]">
-                              <span className="text-4xl block mb-2">🔒</span>
-                              <span className="font-extrabold text-[#A55166] dark:text-pink-300 text-sm">Tra cứu Sổ Khám Cá Nhân</span>
-                              <p className="text-xs text-gray-550 mt-2 max-w-sm leading-relaxed">
-                                Để bảo mật thông tin y chẩn điều trị, vui lòng nhập chính xác **Mã số khám (Mã bệnh án)** hoặc **Tên bệnh nhân** vào thanh tìm kiếm phía trên để tra cứu hồ sơ chẩn trị của riêng bạn.
-                              </p>
-                            </div>
-                          );
-                        }
-
                         if (finalRecords.length === 0) {
                           return (
                             <div className="text-center py-10 text-gray-400 flex flex-col items-center">
@@ -4485,8 +4512,38 @@ export default function App() {
                           );
                         }
 
-                        return finalRecords.map(r => {
-                          const recordCat = categories.find(c => c.id === r.cat);
+                        // Group records by department (Khoa) for clean, uncluttered reading
+                        const groupedRecords: { cat: PromptCategory | null; items: MedicalRecord[] }[] = [];
+                        
+                        categories.forEach(c => {
+                          const items = finalRecords.filter(r => r.cat === c.id);
+                          if (items.length > 0) {
+                            groupedRecords.push({ cat: c, items });
+                          }
+                        });
+
+                        const unassigned = finalRecords.filter(r => !r.cat || !categories.some(c => c.id === r.cat));
+                        if (unassigned.length > 0) {
+                          groupedRecords.push({ cat: null, items: unassigned });
+                        }
+
+                        return groupedRecords.map(({ cat: groupCat, items }) => (
+                          <div key={groupCat ? groupCat.id : "unassigned"} className="flex flex-col gap-2 mb-2">
+                            {/* Department header badge */}
+                            <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-pink-50/85 dark:bg-pink-950/45 border border-pink-100 dark:border-pink-900/35">
+                              <span className="font-extrabold text-xs text-[#A55166] dark:text-pink-300 flex items-center gap-1.5">
+                                <span>{groupCat ? groupCat.icon : "⚠️"}</span>
+                                <span>{groupCat ? groupCat.name : "Chưa Phân Khoa / Khoa Khác"}</span>
+                              </span>
+                              <span className="text-[10px] font-extrabold bg-[#A55166] text-white px-2.5 py-0.5 rounded-full shadow-xs">
+                                {items.length} bệnh án
+                              </span>
+                            </div>
+
+                            {/* Medical records inside this department */}
+                            <div className="flex flex-col gap-2.5 pl-1">
+                              {items.map(r => {
+                                const recordCat = categories.find(c => c.id === r.cat);
                           const isExpanded = !!expandedRecordIds[r.id];
                           const symptoms = r.symptoms || [];
                           
@@ -4607,8 +4664,11 @@ export default function App() {
 
                             </div>
                           );
-                        });
-                      })()}
+                        })}
+                              </div>
+                            </div>
+                          ));
+                        })()}
                     </div>
 
                   </motion.div>
