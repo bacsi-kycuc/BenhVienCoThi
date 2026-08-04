@@ -733,8 +733,14 @@ export default function App() {
   useEffect(() => {
     // 1. Subscribe to Categories
     const unsubCats = onSnapshot(collection(db, "categories"), (snapshot) => {
-      const excludedIds = ["psychiatry", "neurology", "cardiology", "epidemiology", "pediatrics"];
-      const excludedNames = ["Tâm thần", "Thần kinh", "Tim mạch", "Dịch tễ", "Nhi khoa"];
+      const excludedIds = [
+        "psychiatry", "neurology", "cardiology", "epidemiology", "pediatrics",
+        "internal_medicine", "surgery", "emergency", "obstetrics", "orthopedics"
+      ];
+      const excludedNames = [
+        "Tâm thần", "Thần kinh", "Tim mạch", "Dịch tễ", "Nhi khoa",
+        "Nội khoa", "Nội Khoa", "Ngoại khoa", "Ngoại Khoa", "Cấp cứu & Hồi sức", "Sản phụ khoa", "Chấn thương chỉnh hình"
+      ];
 
       if (snapshot.empty) {
         // Seeding initial categories
@@ -759,7 +765,7 @@ export default function App() {
         });
 
         // If they all got deleted and lists became empty, re-seed standard clinical ones
-        if (list.length === 0) {
+        if (list.length === 0 && DEFAULT_CATEGORIES.length > 0) {
           DEFAULT_CATEGORIES.forEach(async (cat) => {
             try {
               await setDoc(doc(db, "categories", cat.id), cat);
@@ -780,8 +786,14 @@ export default function App() {
     // 2. Subscribe to Prompts
     const unsubPrompts = onSnapshot(collection(db, "prompts"), (snapshot) => {
       const list: Prompt[] = [];
-      const excludedCats = ["psychiatry", "neurology", "cardiology", "epidemiology", "pediatrics"];
-      const excludedKhoas = ["Tâm thần", "Thần kinh", "Tim mạch", "Dịch tễ", "Nhi khoa"];
+      const excludedCats = [
+        "psychiatry", "neurology", "cardiology", "epidemiology", "pediatrics",
+        "internal_medicine", "surgery", "emergency", "obstetrics", "orthopedics"
+      ];
+      const excludedKhoas = [
+        "Tâm thần", "Thần kinh", "Tim mạch", "Dịch tễ", "Nhi khoa",
+        "Nội khoa", "Nội Khoa", "Ngoại khoa", "Ngoại Khoa", "Cấp cứu & Hồi sức", "Sản phụ khoa", "Chấn thương chỉnh hình"
+      ];
 
       snapshot.forEach((docSnap) => {
         const item = docSnap.data() as Prompt;
@@ -789,6 +801,7 @@ export default function App() {
         // Exclude and delete sample prompts or those belonging to legacy categories
         if (
           item.id === 1 || item.id === 2 || item.id === 3 || item.id === 4 ||
+          item.id === 101 || item.id === 102 || item.id === 103 || item.id === 104 ||
           excludedCats.includes(item.category) ||
           excludedKhoas.includes(item.khoa)
         ) {
@@ -802,7 +815,7 @@ export default function App() {
       list.sort((a, b) => b.id - a.id);
 
       // If list is empty, seed standard clinical prompts
-      if (list.length === 0) {
+      if (list.length === 0 && DEFAULT_PROMPTS.length > 0) {
         DEFAULT_PROMPTS.forEach(async (p) => {
           try {
             await setDoc(doc(db, "prompts", String(p.id)), p);
@@ -826,14 +839,14 @@ export default function App() {
         localStorage.setItem("offline_phd_records", JSON.stringify([]));
       } else {
         const list: MedicalRecord[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
           
           // Strict non-NaN, 100% unique deterministic integer hashing from string doc IDs or numeric fallback
-          let idNum = Number(data.id) || Number(doc.id);
+          let idNum = Number(data.id) || Number(docSnap.id);
           if (isNaN(idNum) || !idNum) {
             idNum = 0;
-            const docIdStr = String(doc.id);
+            const docIdStr = String(docSnap.id);
             for (let i = 0; i < docIdStr.length; i++) {
               idNum = (idNum << 5) - idNum + docIdStr.charCodeAt(i);
               idNum |= 0;
@@ -856,6 +869,21 @@ export default function App() {
             normalizedCat = "emergency";
           } else {
             normalizedCat = rawCat; // preserve other user entries
+          }
+          
+          const excludedCats = ["internal_medicine", "surgery", "emergency", "obstetrics", "orthopedics"];
+          const sampleNames = ["Trần Văn An", "Nguyễn Thị Bình", "Phạm Minh Đăng"];
+          
+          if (
+            excludedCats.includes(normalizedCat) ||
+            sampleNames.includes(data.name) ||
+            !rawCat ||
+            rawCat === "unassigned"
+          ) {
+            deleteDoc(doc(db, "phdRecords", docSnap.id)).catch(err => {
+              console.warn("Failed to clean up sample record:", err);
+            });
+            return;
           }
           
           list.push({
@@ -2917,16 +2945,10 @@ export default function App() {
             /* MINIMIZED VIEW - Compact circular music note button */
             <button
               onClick={() => setPlayerMinimized(false)}
-              className={`fixed bottom-6 right-6 z-40 w-11 h-11 rounded-full bg-gradient-to-br from-[#A55166] to-[#D38C9D] text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer border border-[#D38C9D]/40 ${playerPlaying ? "animate-spin-slow" : ""}`}
+              className="fixed bottom-6 right-6 z-40 w-11 h-11 rounded-full bg-gradient-to-br from-[#A55166] to-[#D38C9D] text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer border border-[#D38C9D]/40"
               title={`Mở trình phát nhạc: ${musicTitle}`}
             >
-              <Music size={18} className={playerPlaying ? "animate-pulse" : ""} />
-              {playerPlaying && (
-                <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
-                </span>
-              )}
+              <Music size={18} className={playerPlaying ? "animate-[spin_6s_linear_infinite]" : ""} />
             </button>
           ) : (
             /* EXPANDED VIEW - Full features */
@@ -4160,7 +4182,7 @@ export default function App() {
 
                         {/* Bento Room Grid */}
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                          {categories.map(cat => {
+                          {categories.filter(cat => prompts.some(p => p.category === cat.id)).map(cat => {
                             const count = prompts.filter(p => p.category === cat.id).length;
                             const patientCount = phdRecords.filter(r => r.cat === cat.id).length;
                             const isSelect = phdSelectedRoomId === cat.id;
@@ -4306,7 +4328,7 @@ export default function App() {
                             className="w-full py-2 px-3 rounded-xl border border-[#E2B4C1] bg-white dark:bg-black/30 text-xs font-semibold outline-none"
                           >
                             <option value="">-- Chọn phân khoa đề xuất --</option>
-                            {categories.map(c => (
+                            {categories.filter(cat => prompts.some(p => p.category === cat.id)).map(c => (
                               <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
                             ))}
                           </select>
@@ -4541,130 +4563,130 @@ export default function App() {
                             </div>
 
                             {/* Medical records inside this department */}
-                            <div className="flex flex-col gap-2.5 pl-1">
+                            <div className="flex flex-col gap-3 pl-1">
                               {items.map(r => {
                                 const recordCat = categories.find(c => c.id === r.cat);
-                          const isExpanded = !!expandedRecordIds[r.id];
-                          const symptoms = r.symptoms || [];
-                          
-                          return (
-                            <div 
-                              key={r.id}
-                              className="border border-[#E2B4C1]/60 dark:border-pink-900/30 rounded-2xl bg-white/95 dark:bg-[#1e1416]/95 overflow-hidden shadow-sm hover:shadow active:scale-[0.99] transition-all duration-200 p-0.5"
-                            >
-                              
-                              {/* Accordion title header */}
-                              <div 
-                                onClick={() => toggleRecordExpand(r.id)}
-                                className="p-4 flex justify-between items-center gap-3 hover:bg-pink-100/30 dark:hover:bg-rose-950/10 cursor-pointer transition-colors"
-                              >
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <div className="w-5 h-5 rounded-full bg-pink-100 dark:bg-pink-950/60 flex items-center justify-center text-[#A55166] dark:text-pink-300">
-                                    <User size={11} />
-                                  </div>
-                                  <span className="font-extrabold text-xs text-gray-800 dark:text-gray-100">{r.name || "Bệnh nhân ẩn danh"}</span>
-                                  <span className="text-[9px] uppercase tracking-wide font-black text-white bg-gradient-to-r from-pink-500 to-rose-600 px-2 py-0.5 rounded-full shadow-xs">
-                                    {recordCat ? `${recordCat.icon} ${recordCat.name}` : "🏥 Chưa phân khoa"}
-                                  </span>
-                                </div>
+                                const isExpanded = !!expandedRecordIds[r.id];
+                                const symptoms = r.symptoms || [];
                                 
-                                <div className="flex items-center gap-3">
-                                  <span className="text-[9px] text-gray-400 dark:text-gray-500 font-mono italic">{r.date || "Vừa xong"}</span>
-                                  
-                                  {/* Delete card - Only visible for signed-in doctor/admin */}
-                                  {isLoggedIn && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        deleteRecordItem(r.id);
-                                      }}
-                                      className="p-1 rounded-lg bg-red-100/75 hover:bg-red-200/90 dark:bg-red-950/40 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
-                                      title="Thu hồi bệnh án"
+                                return (
+                                  <div 
+                                    key={r.id}
+                                    className="border border-[#E2B4C1]/60 dark:border-pink-900/30 rounded-2xl bg-white/95 dark:bg-[#1e1416]/95 overflow-hidden shadow-sm hover:shadow active:scale-[0.99] transition-all duration-200 p-0.5"
+                                  >
+                                    
+                                    {/* Accordion title header */}
+                                    <div 
+                                      onClick={() => toggleRecordExpand(r.id)}
+                                      className="p-4.5 flex justify-between items-center gap-3 hover:bg-pink-100/30 dark:hover:bg-rose-950/10 cursor-pointer transition-colors"
                                     >
-                                      <Trash2 size={11} />
-                                    </button>
-                                  )}
-
-                                  <div className="text-gray-400 dark:text-gray-500 hover:text-rose-500 transition-colors">
-                                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Expandable record contents */}
-                              {isExpanded && (
-                                <div className="px-4 pb-4 pt-2.5 border-t border-pink-100 dark:border-pink-950/30 flex flex-col gap-3 bg-pink-50/20 dark:bg-black/15">
-                                  
-                                  <div className="grid grid-cols-2 gap-3 pt-1">
-                                    <div className="flex flex-col gap-0.5 text-xs">
-                                      <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Mã số khám:</span>
-                                      <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono text-[10px] select-all bg-emerald-500/5 px-1.5 py-0.5 rounded border border-emerald-500/10 w-fit">{r.id}</span>
-                                    </div>
-                                    <div className="flex flex-col gap-0.5 text-xs">
-                                      <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Nhóm tuổi:</span>
-                                      <span className="text-gray-750 dark:text-gray-300 font-bold">{r.age || "Bí ẩn"}</span>
-                                    </div>
-                                  </div>
-
-                                  <div className="grid grid-cols-1 gap-3">
-                                    <div className="flex flex-col gap-0.5 text-xs">
-                                      <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Khoa tiếp nhận chẩn trị:</span>
-                                      {isLoggedIn ? (
-                                        <select
-                                          value={r.cat || ""}
-                                          onChange={async (e) => {
-                                            const newCatId = e.target.value;
-                                            const updatedRecord = { ...r, cat: newCatId };
-                                            try {
-                                              await setDoc(doc(db, "phdRecords", String(r.id)), updatedRecord);
-                                            } catch (err) {
-                                              handleFirestoreError(err, OperationType.WRITE, `phdRecords/${r.id}`);
-                                            }
-                                            setPhdRecords(prev => prev.map(item => item.id === r.id ? updatedRecord : item));
-                                            addToast(`Đã chuyển bệnh án "${r.name || "ẩn danh"}" sang khoa mới thành công!`, "success");
-                                          }}
-                                          className="py-1 px-1.5 rounded-lg border border-[#E2B4C1] bg-white dark:bg-zinc-800 text-[10px] font-extrabold outline-none cursor-pointer text-gray-800 dark:text-gray-100 mt-1 shadow-xs"
-                                        >
-                                          <option value="">⚠️ Chưa phân khoa / Khoa cũ</option>
-                                          {categories.map(c => (
-                                            <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                                          ))}
-                                        </select>
-                                      ) : (
-                                        <span className="text-gray-750 dark:text-gray-300 font-bold mt-1 text-[11px]">
-                                          {recordCat ? `${recordCat.icon} ${recordCat.name}` : "⚠️ Chưa phân khoa"}
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <div className="w-5 h-5 rounded-full bg-pink-100 dark:bg-pink-950/60 flex items-center justify-center text-[#A55166] dark:text-pink-300">
+                                          <User size={11} />
+                                        </div>
+                                        <span className="font-extrabold text-sm text-gray-800 dark:text-gray-100">{r.name || "Bệnh nhân ẩn danh"}</span>
+                                        <span className="text-[10px] md:text-[9px] uppercase tracking-wide font-black text-white bg-gradient-to-r from-pink-500 to-rose-600 px-2.5 py-0.5 rounded-full shadow-xs">
+                                          {recordCat ? `${recordCat.icon} ${recordCat.name}` : "🏥 Chưa phân khoa"}
                                         </span>
-                                      )}
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-[10px] md:text-[9px] text-gray-400 dark:text-gray-500 font-mono italic">{r.date || "Vừa xong"}</span>
+                                        
+                                        {/* Delete card - Only visible for signed-in doctor/admin */}
+                                        {isLoggedIn && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              deleteRecordItem(r.id);
+                                            }}
+                                            className="p-1 rounded-lg bg-red-100/75 hover:bg-red-200/90 dark:bg-red-950/40 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
+                                            title="Thu hồi bệnh án"
+                                          >
+                                            <Trash2 size={11} />
+                                          </button>
+                                        )}
+
+                                        <div className="text-gray-400 dark:text-gray-500 hover:text-rose-500 transition-colors">
+                                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                        </div>
+                                      </div>
                                     </div>
+
+                                    {/* Expandable record contents */}
+                                    {isExpanded && (
+                                      <div className="px-4.5 pb-4.5 pt-3.5 border-t border-pink-100 dark:border-pink-950/30 flex flex-col gap-4 bg-pink-50/20 dark:bg-black/15">
+                                        
+                                        <div className="grid grid-cols-2 gap-4 pt-1">
+                                          <div className="flex flex-col gap-1 text-sm md:text-xs">
+                                            <span className="text-[10px] md:text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Mã số khám:</span>
+                                            <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono text-xs md:text-[10px] select-all bg-emerald-500/5 px-2.5 py-0.5 rounded border border-emerald-500/10 w-fit">{r.id}</span>
+                                          </div>
+                                          <div className="flex flex-col gap-1 text-sm md:text-xs">
+                                            <span className="text-[10px] md:text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Nhóm tuổi:</span>
+                                            <span className="text-gray-750 dark:text-gray-300 font-bold">{r.age || "Bí ẩn"}</span>
+                                          </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-4">
+                                          <div className="flex flex-col gap-1 text-sm md:text-xs">
+                                            <span className="text-[10px] md:text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Khoa tiếp nhận chẩn trị:</span>
+                                            {isLoggedIn ? (
+                                              <select
+                                                value={r.cat || ""}
+                                                onChange={async (e) => {
+                                                  const newCatId = e.target.value;
+                                                  const updatedRecord = { ...r, cat: newCatId };
+                                                  try {
+                                                    await setDoc(doc(db, "phdRecords", String(r.id)), updatedRecord);
+                                                  } catch (err) {
+                                                    handleFirestoreError(err, OperationType.WRITE, `phdRecords/${r.id}`);
+                                                  }
+                                                  setPhdRecords(prev => prev.map(item => item.id === r.id ? updatedRecord : item));
+                                                  addToast(`Đã chuyển bệnh án "${r.name || "ẩn danh"}" sang khoa mới thành công!`, "success");
+                                                }}
+                                                className="py-1.5 px-2.5 rounded-lg border border-[#E2B4C1] bg-white dark:bg-zinc-800 text-xs md:text-[10px] font-extrabold outline-none cursor-pointer text-gray-800 dark:text-gray-100 mt-1 shadow-xs"
+                                              >
+                                                <option value="">⚠️ Chưa phân khoa / Khoa cũ</option>
+                                                {categories.map(c => (
+                                                  <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                                                ))}
+                                              </select>
+                                            ) : (
+                                              <span className="text-gray-750 dark:text-gray-300 font-bold mt-1 text-xs md:text-[11px]">
+                                                {recordCat ? `${recordCat.icon} ${recordCat.name}` : "⚠️ Chưa phân khoa"}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        <div className="flex flex-col gap-1.5 text-sm md:text-xs">
+                                          <span className="text-[10px] md:text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Triệu chứng chẩn y trị học:</span>
+                                          <div className="flex flex-wrap gap-1.5 mt-1">
+                                            {symptoms.map(s => (
+                                              <span key={s} className="text-xs md:text-[10px] font-bold bg-rose-50/70 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 px-2.5 py-1 rounded-lg border border-rose-100/50 dark:border-pink-900/15">
+                                                {s}
+                                              </span>
+                                            ))}
+                                            {symptoms.length === 0 && (
+                                              <span className="text-xs md:text-[10px] text-gray-400 italic">Không có triệu chứng</span>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        <div className="flex flex-col gap-1.5 text-sm md:text-xs">
+                                          <span className="text-[10px] md:text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Lời tự thuật chi tiết hành vi:</span>
+                                          <p className="text-gray-600 dark:text-gray-350 leading-relaxed md:leading-relaxed italic bg-pink-100/10 dark:bg-black/25 p-3.5 rounded-xl border border-pink-100/30 dark:border-pink-900/10 font-medium text-sm md:text-xs">
+                                            "{r.note || "(Không ghi chép hành vi)"}"
+                                          </p>
+                                        </div>
+
+                                      </div>
+                                    )}
+
                                   </div>
-
-                                  <div className="flex flex-col gap-1 text-xs">
-                                    <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Triệu chứng chẩn y trị học:</span>
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {symptoms.map(s => (
-                                        <span key={s} className="text-[10px] font-bold bg-rose-50/70 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 px-2 py-0.5 rounded-lg border border-rose-100/50 dark:border-pink-900/15">
-                                          {s}
-                                        </span>
-                                      ))}
-                                      {symptoms.length === 0 && (
-                                        <span className="text-[10px] text-gray-400 italic">Không có triệu chứng</span>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="flex flex-col gap-1 text-xs">
-                                    <span className="text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Lời tự thuật chi tiết hành vi:</span>
-                                    <p className="text-gray-600 dark:text-gray-350 leading-relaxed italic bg-pink-100/10 dark:bg-black/25 p-3 rounded-xl border border-pink-100/30 dark:border-pink-900/10 font-medium">
-                                      "{r.note || "(Không ghi chép hành vi)"}"
-                                    </p>
-                                  </div>
-
-                                </div>
-                              )}
-
-                            </div>
-                          );
-                        })}
+                                );
+                              })}
                               </div>
                             </div>
                           ));
