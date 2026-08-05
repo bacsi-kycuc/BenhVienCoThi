@@ -53,3 +53,16 @@ export interface Sticker {
   driftY: number;
   stickerIndex?: number;
 }
+
+export interface Feedback {
+  id: string;
+  promptId: number;
+  author: string;
+  comment: string;
+  rating: number; // 1 to 5 stars
+  timestamp: string;
+  isReported?: boolean;
+  reportedReason?: string;
+  reportedAt?: string;
+}
+

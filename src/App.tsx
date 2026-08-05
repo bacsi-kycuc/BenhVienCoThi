@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
+import { QuickAdmissionModal } from "./components/QuickAdmissionModal";
 import { 
   PromptCategory, 
   Prompt, 
   MedicalRecord,
-  Sticker
+  Sticker,
+  Feedback
 } from "./types";
 import { 
   DEFAULT_CATEGORIES, 
@@ -49,7 +51,9 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  ArrowUp
+  ArrowUp,
+  Star,
+  AlertTriangle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { PastelStickerComponents } from "./components/PastelStickers";
@@ -86,6 +90,8 @@ interface PromptCardProps {
   onDelete: (id: number) => void;
   onPasswordFail: (showTroll: boolean, gifUrl?: string, soundUrl?: string) => void;
   onStickerBurst?: (e: React.MouseEvent) => void;
+  feedbacks: Feedback[];
+  onOpenFeedback: (p: Prompt) => void;
 }
 
 export function PromptCard({
@@ -98,7 +104,9 @@ export function PromptCard({
   onEdit,
   onDelete,
   onPasswordFail,
-  onStickerBurst
+  onStickerBurst,
+  feedbacks,
+  onOpenFeedback
 }: PromptCardProps) {
   const [localFailCount, setLocalFailCount] = useState(0);
   const [showLocalUnlock, setShowLocalUnlock] = useState(false);
@@ -311,7 +319,7 @@ export function PromptCard({
           </p>
 
           {/* Subtle Metadata Row */}
-          <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-gray-500 font-medium mb-3.5">
+          <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-400 dark:text-gray-500 font-medium mb-3.5">
             <span className="flex items-center gap-1">
               <Eye size={12} className="text-pink-300 dark:text-pink-900" />
               <span>{p.views ?? Math.floor(((p.id * 324) % 1500) + 200)} lượt xem</span>
@@ -321,6 +329,22 @@ export function PromptCard({
               <Clock size={12} className="text-pink-300 dark:text-pink-900" />
               <span>{p.updatedAt ?? "2 ngày trước"}</span>
             </span>
+            {(() => {
+              const promptFeedbacks = (feedbacks || []).filter(f => f.promptId === p.id);
+              const feedbackCount = promptFeedbacks.length;
+              const avgRating = feedbackCount > 0 
+                ? (promptFeedbacks.reduce((sum, f) => sum + f.rating, 0) / feedbackCount).toFixed(1) 
+                : null;
+              if (!avgRating) return null;
+              return (
+                <>
+                  <span className="w-1 h-1 rounded-full bg-gray-200 dark:bg-gray-800" />
+                  <span className="flex items-center gap-1 text-amber-500 font-bold">
+                    ⭐ {avgRating} ({feedbackCount})
+                  </span>
+                </>
+              );
+            })()}
             {p.isNew && (
               <>
                 <span className="w-1 h-1 rounded-full bg-gray-200 dark:bg-gray-800" />
@@ -331,7 +355,7 @@ export function PromptCard({
         </div>
 
         {/* Actions row wrapping is made interactive explicitly */}
-        <div className="pointer-events-auto w-full z-10 grid grid-cols-2 gap-2 mb-2" onClick={(e) => e.stopPropagation()}>
+        <div className="pointer-events-auto w-full z-10 grid grid-cols-3 gap-1.5 mb-2" onClick={(e) => e.stopPropagation()}>
           {/* Bé Đến Đây! Button */}
           <button
             type="button"
@@ -340,9 +364,8 @@ export function PromptCard({
               handleCardClick();
               if (onStickerBurst) onStickerBurst(e);
             }}
-            className="inline-flex items-center justify-center gap-1 w-full py-2 px-2 rounded-xl text-[10.5px] font-extrabold text-[#5C3D4F] bg-gradient-to-r from-[#FFB6C1] to-[#FCE7F3] hover:from-[#FFC2D1] hover:to-[#FDF2F8] shadow-xs hover:shadow-[#FFB6C1]/50 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer uppercase tracking-wider text-center pointer-events-auto border border-[#FFA4B5]/30"
+            className="inline-flex items-center justify-center gap-0.5 w-full py-2 px-1 rounded-xl text-[9px] sm:text-[9.5px] font-extrabold text-[#5C3D4F] bg-gradient-to-r from-[#FFB6C1] to-[#FCE7F3] hover:from-[#FFC2D1] hover:to-[#FDF2F8] shadow-xs hover:shadow-[#FFB6C1]/50 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer uppercase tracking-wider text-center pointer-events-auto border border-[#FFA4B5]/30"
           >
-            <Sparkles size={12} className="text-[#5C3D4F]" />
             <span>Bé Đến Đây!</span>
           </button>
 
@@ -356,9 +379,9 @@ export function PromptCard({
                 e.stopPropagation();
                 if (onStickerBurst) onStickerBurst(e);
               }}
-              className="inline-flex items-center justify-center gap-1 w-full py-2 px-2 rounded-xl text-[10.5px] font-extrabold text-[#5C3D4F] bg-gradient-to-r from-[#FFD4F3] via-[#FFD4F3] to-[#D9FFE8] hover:from-[#FFE0F6] hover:via-[#FFE0F6] hover:to-[#E4FFF0] shadow-xs hover:shadow-[#FFD4F3]/50 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer uppercase tracking-wider text-center pointer-events-auto"
+              className="inline-flex items-center justify-center gap-0.5 w-full py-2 px-1 rounded-xl text-[9.5px] font-extrabold text-[#5C3D4F] bg-gradient-to-r from-[#FFD4F3] via-[#FFD4F3] to-[#D9FFE8] hover:from-[#FFE0F6] hover:via-[#FFE0F6] hover:to-[#E4FFF0] shadow-xs hover:shadow-[#FFD4F3]/50 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer uppercase tracking-wider text-center pointer-events-auto"
             >
-              <BookOpen size={12} className="text-[#5C3D4F]" />
+              <BookOpen size={11} className="text-[#5C3D4F]" />
               <span>PLOT</span>
             </a>
           ) : (
@@ -368,12 +391,24 @@ export function PromptCard({
               onClick={(e) => {
                 e.stopPropagation();
               }}
-              className="inline-flex items-center justify-center gap-1 w-full py-2 px-2 rounded-xl text-[10.5px] font-semibold text-purple-300/40 dark:text-purple-400/20 border border-purple-900/10 dark:border-purple-950/20 cursor-not-allowed opacity-60 uppercase tracking-wider text-center bg-transparent pointer-events-auto"
+              className="inline-flex items-center justify-center gap-0.5 w-full py-2 px-1 rounded-xl text-[9.5px] font-semibold text-purple-300/40 dark:text-purple-400/20 border border-purple-900/10 dark:border-purple-950/20 cursor-not-allowed opacity-60 uppercase tracking-wider text-center bg-transparent pointer-events-auto"
             >
-              <BookOpen size={12} />
+              <BookOpen size={11} />
               <span>PLOT</span>
             </button>
           )}
+
+          {/* Feedback/Nhận xét Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenFeedback(p);
+            }}
+            className="inline-flex items-center justify-center gap-0.5 w-full py-2 px-1 rounded-xl text-[9.5px] font-extrabold text-[#5C3D4F] bg-gradient-to-r from-amber-100 to-amber-200 hover:from-amber-200 hover:to-amber-300 shadow-xs hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer uppercase tracking-wider text-center pointer-events-auto border border-amber-300/30"
+          >
+            <span>Nhận xét</span>
+          </button>
         </div>
 
         {/* Tag badges cloud & Elegant Rose Quartz/Blush Vote Box footer */}
@@ -616,6 +651,25 @@ export default function App() {
   // Core Data Lists
   const [categories, setCategories] = useState<PromptCategory[]>(DEFAULT_CATEGORIES);
   const [prompts, setPrompts] = useState<Prompt[]>([]);
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  
+  // Feedback specific states
+  const [selectedFeedbackPrompt, setSelectedFeedbackPrompt] = useState<Prompt | null>(null);
+  const [showFeedbackModal, setShowFeedbackModal] = useState<boolean>(false);
+  const [showReportsModal, setShowReportsModal] = useState<boolean>(false);
+  const [feedbackSubTab, setFeedbackSubTab] = useState<"view" | "write">("view");
+  const [feedbackRating, setFeedbackRating] = useState<number>(5);
+  const [feedbackComment, setFeedbackComment] = useState<string>("");
+  const [feedbackAuthorType, setFeedbackAuthorType] = useState<"anonymous" | "nickname">("anonymous");
+  const [feedbackNickname, setFeedbackNickname] = useState<string>("");
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState<boolean>(false);
+
+  const getPromptAvgRating = (pId: number): number => {
+    const promptFeedbacks = feedbacks.filter(f => f.promptId === pId);
+    if (promptFeedbacks.length === 0) return 0;
+    return promptFeedbacks.reduce((sum, f) => sum + f.rating, 0) / promptFeedbacks.length;
+  };
+
   const [phdRecords, setPhdRecords] = useState<MedicalRecord[]>(() => {
     try {
       const fallback = localStorage.getItem("offline_phd_records");
@@ -943,13 +997,42 @@ export default function App() {
       console.warn("Failed to listen to maintenance mode config:", err);
     });
 
+    // 5. Subscribe to Feedbacks
+    const unsubFeedbacks = onSnapshot(collection(db, "feedbacks"), (snapshot) => {
+      const list: Feedback[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as Feedback);
+      });
+      setFeedbacks(list);
+    }, (err) => {
+      if (err instanceof Error && (err.message.includes("Quota") || err.message.includes("quota"))) {
+        setDbQuotaError(true);
+      }
+      handleFirestoreError(err, OperationType.LIST, "feedbacks");
+    });
+
     return () => {
       unsubCats();
       unsubPrompts();
       unsubRecords();
       unsubMaintenance();
+      unsubFeedbacks();
     };
   }, []);
+
+  // Clean up any unassigned/unknown category medical records from Firestore permanently
+  useEffect(() => {
+    if (categories.length === 0 || phdRecords.length === 0) return;
+    const catIds = new Set(categories.map(c => c.id));
+    phdRecords.forEach(r => {
+      if (!catIds.has(r.cat)) {
+        // This is a record in 'Khoa Khác/Chưa phân khoa', delete/exclude it!
+        deleteDoc(doc(db, "phdRecords", String(r.id))).catch(err => {
+          console.warn("Could not delete unassigned record:", err);
+        });
+      }
+    });
+  }, [categories, phdRecords]);
 
   // Active Main UI Filtering States
   const [activeGenre, setActiveGenre] = useState<string>("all");
@@ -1034,9 +1117,25 @@ export default function App() {
   const [phdOpen, setPhdOpen] = useState(false);
   const [phdTab, setPhdTab] = useState<"find" | "register" | "records">("find");
 
-  // Selection room filter inside "Tìm Bác Sĩ" (PHD Modal)
+  // Quick Doctor Finder & Survey state
+  const [quickSearchQuery, setQuickSearchQuery] = useState("");
+  const [rolledDoctor, setRolledDoctor] = useState<Prompt | null>(null);
+  const [isRollingDice, setIsRollingDice] = useState(false);
+
+  const handleRollDice = () => {
+    if (prompts.length === 0) return;
+    setIsRollingDice(true);
+    setTimeout(() => {
+      const randomIndex = Math.floor(Math.random() * prompts.length);
+      setRolledDoctor(prompts[randomIndex]);
+      setIsRollingDice(false);
+    }, 1800);
+  };
+
+// Selection room filter inside "Tìm Bác Sĩ" (PHD Modal)
   const [phdSelectedRoomId, setPhdSelectedRoomId] = useState<string | null>(null);
   const [phdSearchQuery, setPhdSearchQuery] = useState("");
+  const [phdSortByRating, setPhdSortByRating] = useState<boolean>(false);
 
   // Record Sorting/search in PHD records view
   const [phdRecordSearch, setPhdRecordSearch] = useState("");
@@ -1213,6 +1312,97 @@ export default function App() {
       setTimeout(() => {
         setFloatingHearts(prev => prev.filter(h => h.id !== newHeart.id));
       }, 1800);
+    }
+  };
+
+  const handleOpenFeedback = (p: Prompt) => {
+    setSelectedFeedbackPrompt(p);
+    setFeedbackRating(5);
+    setFeedbackComment("");
+    setFeedbackAuthorType("anonymous");
+    setFeedbackNickname("");
+    setFeedbackSubTab("view");
+    setShowFeedbackModal(true);
+  };
+
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFeedbackPrompt) return;
+    if (!feedbackComment.trim()) {
+      addToast("Vui lòng nhập nội dung nhận xét/gửi gắm!", "warning");
+      return;
+    }
+
+    setIsSubmittingFeedback(true);
+    const authorName = feedbackAuthorType === "anonymous" 
+      ? "Bệnh nhân ẩn danh" 
+      : (feedbackNickname.trim() || "Bệnh nhân ẩn danh");
+
+    const feedbackId = "fb_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11);
+    const newFeedback: Feedback = {
+      id: feedbackId,
+      promptId: selectedFeedbackPrompt.id,
+      author: authorName,
+      comment: feedbackComment.trim(),
+      rating: feedbackRating,
+      timestamp: new Date().toISOString(),
+      isReported: false
+    };
+
+    try {
+      await setDoc(doc(db, "feedbacks", feedbackId), newFeedback);
+      addToast("Gửi lời gửi gắm thành công! Cảm ơn bé đã chia sẻ nhé 🌸", "success");
+      
+      // Trigger lovely firework explosion Confetti effect
+      setPhdConfettiActive(true);
+      
+      // Reset form states
+      setFeedbackComment("");
+      setFeedbackNickname("");
+      setFeedbackRating(5);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `feedbacks/${feedbackId}`);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
+  const handleReportFeedback = async (fb: Feedback) => {
+    const updatedFeedback = {
+      ...fb,
+      isReported: true,
+      reportedReason: "Phản hồi không phù hợp",
+      reportedAt: new Date().toISOString()
+    };
+    try {
+      await setDoc(doc(db, "feedbacks", fb.id), updatedFeedback);
+      addToast("Đã báo cáo kiểm duyệt phản hồi này đến Admin!", "success");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fb.id}`);
+    }
+  };
+
+  const handleDismissReport = async (fb: Feedback) => {
+    const updatedFeedback = {
+      ...fb,
+      isReported: false
+    };
+    delete updatedFeedback.reportedReason;
+    delete updatedFeedback.reportedAt;
+    try {
+      await setDoc(doc(db, "feedbacks", fb.id), updatedFeedback);
+      addToast("Đã gỡ báo cáo thành công!", "success");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fb.id}`);
+    }
+  };
+
+  const handleDeleteFeedback = async (fbId: string) => {
+    try {
+      await deleteDoc(doc(db, "feedbacks", fbId));
+      addToast("Đã xóa phản hồi thành công!", "success");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fbId}`);
     }
   };
 
@@ -1950,7 +2140,11 @@ export default function App() {
     setMainSearchQuery(prompt.name);
     setActiveGenre("all");
     setSelectedTag(null);
+    setCurrentPage(1);
     setPhdOpen(false);
+    setTimeout(() => {
+      document.getElementById("prompt-cards-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   const verifyPromptUnlock = () => {
@@ -2345,11 +2539,15 @@ export default function App() {
 
             <div className="relative z-10 flex items-center gap-4">
               <div 
-                className="text-4xl bg-white/20 p-3 rounded-2xl backdrop-blur-md cursor-pointer hover:rotate-12 transition-transform"
+                className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden bg-white/20 p-1 backdrop-blur-md cursor-pointer hover:scale-105 hover:rotate-6 transition-all border border-white/30 flex items-center justify-center flex-shrink-0"
                 onClick={() => setScreen("welcome")}
                 title="Quay lại trang chủ"
               >
-                🏥
+                <img 
+                  src="https://i.postimg.cc/XYbJ2Dk3/hospitalicon.png" 
+                  alt="Viện Tâm Thần Cố Thị" 
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div>
                 <h1 className="font-serif italic text-2xl sm:text-3xl font-black tracking-wide drop-shadow-md">
@@ -2368,19 +2566,18 @@ export default function App() {
 
             {/* Quick access status controllers */}
             <div className="relative z-10 flex flex-wrap items-center gap-3 w-full md:w-auto">
-              
-              <button 
-                onClick={() => {
-                  setPhdOpen(true);
-                  setPhdTab("records");
-                }}
-                className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-white text-rose-800 font-extrabold text-xs shadow-md hover:bg-rose-50 transition-all cursor-pointer"
-              >
-                📋 {isLoggedIn ? "Kiểm Sổ Khám" : "Sổ Khám & Lập Bệnh Án"}
-              </button>
-
               {isLoggedIn && (
                 <>
+                  {feedbacks.filter(f => f.isReported).length > 0 && (
+                    <button 
+                      onClick={() => setShowReportsModal(true)}
+                      className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs shadow-md border border-amber-400 transition-all cursor-pointer hover:scale-[1.02] animate-pulse"
+                      title="Có phản hồi bị người dùng báo cáo vi phạm!"
+                    >
+                      <AlertTriangle size={14} /> Kiểm duyệt ({feedbacks.filter(f => f.isReported).length})
+                    </button>
+                  )}
+
                   <button 
                     onClick={triggerAddPrompt}
                     className="flex items-center gap-1 px-3.5 py-2.5 rounded-xl bg-[#A55166] hover:bg-[#8C3E52] text-white font-bold text-xs shadow-md border border-[#D38C9D]/45 transition-all cursor-pointer hover:scale-[1.02]"
@@ -2668,7 +2865,7 @@ export default function App() {
           <div className="w-full flex flex-col gap-6">
             
             {/* WORKSPACE & CONTENT LISTING */}
-            <main className="w-full flex flex-col gap-6">
+            <main id="prompt-cards-section" className="w-full flex flex-col gap-6">
 
               {/* SEARCH TEXT BAR */}
               <div className="relative overflow-hidden bg-white/75 dark:bg-[#1E2533]/85 backdrop-blur-md rounded-2xl p-4 border-2 border-pink-100 dark:border-pink-950/40 shadow-md flex items-center gap-3">
@@ -2796,6 +2993,8 @@ export default function App() {
                           onDelete={deletePrompt}
                           onPasswordFail={handlePasswordFail}
                           onStickerBurst={triggerStickerBurst}
+                          feedbacks={feedbacks}
+                          onOpenFeedback={handleOpenFeedback}
                         />
                       ))}
 
@@ -2976,9 +3175,14 @@ export default function App() {
                 <div className="flex items-center gap-3 justify-between">
                   <button
                     onClick={() => setPlayerPlaying(!playerPlaying)}
-                    className="w-8 h-8 rounded-full bg-gradient-to-r from-rose-400 to-pink-500 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-sm"
+                    className={`w-8 h-8 rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-sm cursor-pointer ${
+                      playerPlaying 
+                        ? "bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-300 border border-amber-300/50"
+                        : "bg-gradient-to-r from-rose-400 to-pink-500 text-white"
+                    }`}
+                    title={playerPlaying ? "Tạm dừng" : "Phát nhạc"}
                   >
-                    {playerPlaying ? <Pause size={14} /> : <Play size={14} />}
+                    {playerPlaying ? <Music size={14} className="animate-[spin_4s_linear_infinite]" /> : <Play size={14} />}
                   </button>
 
                   <div className="flex-1 flex items-center gap-2">
@@ -3897,6 +4101,393 @@ export default function App() {
       </AnimatePresence>
 
       {/* ========================================== */}
+      {/* MODAL: PATIENT FEEDBACK / MESSAGES         */}
+      {/* ========================================== */}
+      <AnimatePresence>
+        {showFeedbackModal && selectedFeedbackPrompt && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gradient-to-br from-[#FBF6F9] to-[#EFE2EB] dark:from-[#211A1D] dark:to-[#171113] p-6 rounded-3xl border-2 border-pink-200 dark:border-pink-900 w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center pb-3 border-b border-pink-100 dark:border-pink-900/35 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{selectedFeedbackPrompt.icon || "🩺"}</span>
+                  <div>
+                    <h4 className="font-serif italic font-bold text-rose-800 dark:text-rose-300 text-base leading-tight">
+                      Nhận xét: {selectedFeedbackPrompt.name}
+                    </h4>
+                    <span className="text-[10px] text-gray-400 font-bold tracking-wider uppercase">
+                      Khoa: {categories.find(c => c.id === selectedFeedbackPrompt.category)?.name || "Đặc thù"}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowFeedbackModal(false)}
+                  className="p-1.5 rounded-full bg-rose-100 hover:bg-rose-200 dark:bg-rose-950 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 transition-colors cursor-pointer flex items-center justify-center w-7 h-7 border-0"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Sub tabs Row */}
+              <div className="flex gap-2 border-b border-pink-100 dark:border-pink-950/20 my-4 pb-[1px] flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setFeedbackSubTab("view")}
+                  className={`px-4 py-2 text-xs font-extrabold cursor-pointer relative transition-colors bg-transparent border-0 ${
+                    feedbackSubTab === "view" ? "text-rose-800 dark:text-rose-300" : "text-gray-400 hover:text-rose-500"
+                  }`}
+                >
+                  <span className="relative z-10">Lịch sử ({feedbacks.filter(f => f.promptId === selectedFeedbackPrompt.id).length})</span>
+                  {feedbackSubTab === "view" && (
+                    <motion.div
+                      layoutId="activeFeedbackSubTabLine"
+                      className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-rose-500 dark:bg-rose-400"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFeedbackSubTab("write")}
+                  className={`px-4 py-2 text-xs font-extrabold cursor-pointer relative transition-colors bg-transparent border-0 ${
+                    feedbackSubTab === "write" ? "text-rose-800 dark:text-rose-300" : "text-gray-400 hover:text-rose-500"
+                  }`}
+                >
+                  <span className="relative z-10">Gửi nhận xét</span>
+                  {feedbackSubTab === "write" && (
+                    <motion.div
+                      layoutId="activeFeedbackSubTabLine"
+                      className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-rose-500 dark:bg-rose-400"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                </button>
+              </div>
+
+              {/* Body Content */}
+              <div className="flex-1 overflow-y-auto pr-1">
+                {feedbackSubTab === "view" ? (
+                  <div className="flex flex-col gap-3 pb-2">
+                    {feedbacks.filter(f => f.promptId === selectedFeedbackPrompt.id).length === 0 ? (
+                      <div className="text-center py-12 text-gray-400">
+                        <p className="text-xs font-bold text-gray-700 dark:text-gray-200">Chưa có lời nhận xét nào.</p>
+                        <p className="text-[11px] text-gray-400 dark:text-gray-400 mt-1">Hãy là người đầu tiên nha bé!</p>
+                      </div>
+                    ) : (
+                      feedbacks
+                        .filter(f => f.promptId === selectedFeedbackPrompt.id)
+                        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                        .map(f => {
+                          const dateObj = new Date(f.timestamp);
+                          const formattedTime = isNaN(dateObj.getTime()) 
+                            ? "Vừa xong" 
+                            : `${dateObj.getDate()}/${dateObj.getMonth() + 1} ${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2, "0")}`;
+                          
+                          return (
+                            <div
+                              key={f.id}
+                              className="p-3.5 rounded-2xl bg-white dark:bg-black/20 border border-pink-100/70 dark:border-pink-900/10 shadow-xs flex flex-col gap-1.5"
+                            >
+                              <div className="flex justify-between items-start gap-2">
+                                <div>
+                                  <span className="font-extrabold text-xs text-rose-700 dark:text-rose-300">
+                                    {f.author}
+                                  </span>
+                                  <span className="text-[9px] text-gray-400 block">{formattedTime}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {Array.from({ length: 5 }).map((_, i) => (
+                                    <Star
+                                      key={i}
+                                      size={10}
+                                      className={i < f.rating ? "fill-amber-400 text-amber-400" : "text-gray-200 dark:text-gray-850"}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                {f.comment}
+                              </p>
+
+                              <div className="flex justify-end items-center gap-2 mt-1 pt-1.5 border-t border-dashed border-pink-100/40 dark:border-pink-900/10">
+                                {f.isReported ? (
+                                  <span className="text-[9px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                                    Đang kiểm duyệt
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReportFeedback(f)}
+                                    className="text-[9px] font-extrabold text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 transition-colors flex items-center gap-0.5 cursor-pointer bg-transparent border-0"
+                                    title="Báo cáo bình luận xấu"
+                                  >
+                                    Báo cáo
+                                  </button>
+                                )}
+
+                                {isLoggedIn && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (confirm("Bạn có chắc muốn xóa phản hồi này vĩnh viễn?")) {
+                                        handleDeleteFeedback(f.id);
+                                      }
+                                    }}
+                                    className="text-[9px] font-extrabold text-red-500 hover:text-red-700 transition-colors flex items-center gap-0.5 cursor-pointer bg-transparent border-0"
+                                    title="Admin xóa phản hồi"
+                                  >
+                                    Xóa
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
+                ) : (
+                  <form onSubmit={handleFeedbackSubmit} className="flex flex-col gap-4 py-2">
+                    {/* Star Rating select */}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-bold text-rose-800 dark:text-rose-300">Bé chấm người này là:</span>
+                      <div className="flex gap-2 items-center my-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setFeedbackRating(star)}
+                            className="p-1 cursor-pointer transition-transform hover:scale-125 focus:outline-none bg-transparent border-0"
+                          >
+                            <Star
+                              size={24}
+                              className={star <= feedbackRating ? "fill-amber-400 text-amber-400 animate-pulse" : "text-gray-300 dark:text-gray-700"}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Comment text area */}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-xs font-bold text-rose-800 dark:text-rose-300">Lời bé muốn nói:</span>
+                      <textarea
+                        value={feedbackComment}
+                        onChange={(e) => setFeedbackComment(e.target.value)}
+                        rows={4}
+                        placeholder="Nói bao nhiêu cũng được bé ơi..."
+                        className="w-full py-2 px-3 rounded-2xl border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/20 text-xs font-semibold focus:border-rose-500 outline-none resize-none leading-relaxed"
+                      />
+                    </div>
+
+                    {/* Author selection */}
+                    <div className="flex flex-col gap-2">
+                      <span className="text-xs font-bold text-rose-800 dark:text-rose-300">Bé hiện ra là:</span>
+                      <div className="flex gap-4 items-center">
+                        <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer text-gray-700 dark:text-gray-300">
+                          <input
+                            type="radio"
+                            name="authorType"
+                            checked={feedbackAuthorType === "anonymous"}
+                            onChange={() => setFeedbackAuthorType("anonymous")}
+                            className="accent-rose-500"
+                          />
+                          Gửi ẩn danh
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer text-gray-700 dark:text-gray-300">
+                          <input
+                            type="radio"
+                            name="authorType"
+                            checked={feedbackAuthorType === "nickname"}
+                            onChange={() => setFeedbackAuthorType("nickname")}
+                            className="accent-rose-500"
+                          />
+                          Đặt biệt danh
+                        </label>
+                      </div>
+
+                      {feedbackAuthorType === "nickname" && (
+                        <input
+                          type="text"
+                          value={feedbackNickname}
+                          onChange={(e) => setFeedbackNickname(e.target.value)}
+                          maxLength={30}
+                          placeholder="Bé muốn tên là..."
+                          className="w-full mt-1.5 py-2 px-3 rounded-xl border border-pink-100 dark:border-pink-900 bg-white dark:bg-black/20 text-xs font-semibold outline-none"
+                        />
+                      )}
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="pt-2">
+                      <button
+                        type="submit"
+                        disabled={isSubmittingFeedback}
+                        className="w-full py-3 rounded-2xl bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 text-white font-extrabold text-xs shadow-md shadow-pink-500/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 border-0"
+                      >
+                        {isSubmittingFeedback ? (
+                          <>Đang gửi nhận xét...</>
+                        ) : (
+                          <>Đăng Nhận Xét</>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+
+              {/* Close Footer */}
+              <div className="pt-3 border-t border-pink-100 dark:border-pink-900/35 flex justify-end mt-4 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowFeedbackModal(false)}
+                  className="px-5 py-2 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold cursor-pointer border-0"
+                >
+                  Đóng cửa sổ
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================== */}
+      {/* MODAL: ADMIN REPORTS MODERATION           */}
+      {/* ========================================== */}
+      <AnimatePresence>
+        {showReportsModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gradient-to-br from-[#FBF6F9] to-[#EFE2EB] dark:from-[#211A1D] dark:to-[#171113] p-6 rounded-3xl border-2 border-pink-200 dark:border-pink-900 w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center pb-3 border-b border-pink-100 dark:border-pink-900/35 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🛡️</span>
+                  <div>
+                    <h4 className="font-serif italic font-bold text-amber-600 dark:text-amber-400 text-base leading-tight">
+                      Kiểm Duyệt Phản Hồi Xấu
+                    </h4>
+                    <span className="text-[10px] text-gray-400 font-bold tracking-wider uppercase">
+                      Danh sách các lời nhắn bị người dùng báo cáo vi phạm
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowReportsModal(false)}
+                  className="p-1.5 rounded-full bg-rose-100 hover:bg-rose-200 dark:bg-rose-950 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 transition-colors cursor-pointer flex items-center justify-center w-7 h-7 border-0"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Body Content */}
+              <div className="flex-1 overflow-y-auto pr-1 py-4">
+                {feedbacks.filter(f => f.isReported).length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <span className="text-3xl block mb-2">💚</span>
+                    <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Sạch bóng báo cáo vi phạm!</p>
+                    <p className="text-[10px] text-gray-400 mt-1">Cộng đồng bệnh nhân Viện Cố Thị đang rất văn minh lịch sự.</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {feedbacks
+                      .filter(f => f.isReported)
+                      .map(f => {
+                        const associatedPrompt = prompts.find(p => p.id === f.promptId);
+                        const reportDate = f.reportedAt ? new Date(f.reportedAt) : null;
+                        const formattedTime = reportDate && !isNaN(reportDate.getTime())
+                          ? `${reportDate.getDate()}/${reportDate.getMonth() + 1} ${reportDate.getHours()}:${String(reportDate.getMinutes()).padStart(2, "0")}`
+                          : "Vừa xong";
+
+                        return (
+                          <div
+                            key={f.id}
+                            className="p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 shadow-xs flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2"
+                          >
+                            <div className="flex justify-between items-start flex-wrap gap-1.5">
+                              <div>
+                                <span className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded-full">
+                                  Lý do: {f.reportedReason || "Báo cáo chung"}
+                                </span>
+                                <span className="text-[9px] text-gray-400 block mt-0.5">Báo cáo lúc: {formattedTime}</span>
+                              </div>
+                              <span className="text-xs font-bold text-rose-800 dark:text-rose-300">
+                                Gửi đến: {associatedPrompt ? associatedPrompt.name : `ID Prompt: ${f.promptId}`}
+                              </span>
+                            </div>
+
+                            <div className="p-3 bg-white dark:bg-black/35 rounded-xl border border-pink-105/40 dark:border-pink-900/10">
+                              <div className="flex justify-between items-center gap-2 mb-1.5 border-b border-dashed border-pink-100/30 pb-1">
+                                <span className="font-extrabold text-xs text-rose-700 dark:text-rose-300">
+                                  {f.author}
+                                </span>
+                                <div className="flex gap-0.5">
+                                  {Array.from({ length: 5 }).map((_, i) => (
+                                    <Star
+                                      key={i}
+                                      size={8}
+                                      className={i < f.rating ? "fill-amber-400 text-amber-400" : "text-gray-200 dark:text-gray-800"}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 leading-relaxed italic">
+                                "{f.comment}"
+                              </p>
+                            </div>
+
+                            {/* Moderator Buttons */}
+                            <div className="flex gap-2.5 justify-end mt-1 pt-1.5 border-t border-amber-200/50">
+                              <button
+                                type="button"
+                                onClick={() => handleDismissReport(f)}
+                                className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-[10px] shadow-sm flex items-center gap-1 cursor-pointer transition-colors border-0 animate-none"
+                              >
+                                ✔️ Bỏ qua báo cáo (An toàn)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm("Xóa vĩnh viễn lời nhắn này?")) {
+                                    handleDeleteFeedback(f.id);
+                                  }
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-[10px] shadow-sm flex items-center gap-1 cursor-pointer transition-colors border-0"
+                              >
+                                🗑️ Xóa phản hồi xấu
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="pt-3 border-t border-pink-100 dark:border-pink-900/35 flex justify-end flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowReportsModal(false)}
+                  className="px-5 py-2 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold cursor-pointer border-0"
+                >
+                  Đóng trình duyệt
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================== */}
       {/* MODAL: CENTRALIZED TROLL WARNING OVERLAY     */}
       {/* ========================================== */}
       <AnimatePresence>
@@ -4011,18 +4602,33 @@ export default function App() {
       {/* =============================================== */}
       {/* PHIẾU ĐĂNG KÝ CHẨN ĐOÁN (PHD MODAL)             */}
       {/* =============================================== */}
-      <AnimatePresence>
-        {!isMaintenance && phdOpen && (
-          <div className="fixed inset-0 bg-[#1E0A14]/65 backdrop-blur-md z-[8000] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ scale: 0.96, opacity: 0, y: 15 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.96, opacity: 0, y: 15 }}
-              className="bg-white/95 dark:bg-[#251419]/95 border-2 border-pink-200 dark:border-pink-950 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
-            >
-              
-              {/* PHD Header panel */}
-              <div className="flex items-center justify-between gap-4 p-5 border-b border-pink-200/50 dark:border-pink-900/35 bg-gradient-to-r from-[#D38C9D] to-[#A55166] text-white">
+      <QuickAdmissionModal
+        isOpen={phdOpen}
+        onClose={closePhdModal}
+        isMaintenance={isMaintenance}
+        quickSearchQuery={quickSearchQuery}
+        setQuickSearchQuery={setQuickSearchQuery}
+        prompts={prompts}
+        categories={categories}
+        rolledDoctor={rolledDoctor}
+        isRollingDice={isRollingDice}
+        handleRollDice={handleRollDice}
+        selectDoctorAndNavigate={selectDoctorAndNavigate}
+        getPromptAvgRating={getPromptAvgRating}
+      />
+      {false && (
+        <AnimatePresence>
+          {!isMaintenance && phdOpen && (
+            <div className="fixed inset-0 bg-[#1E0A14]/65 backdrop-blur-md z-[8000] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ scale: 0.96, opacity: 0, y: 15 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.96, opacity: 0, y: 15 }}
+                className="bg-white/95 dark:bg-[#251419]/95 border-2 border-pink-200 dark:border-pink-950 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+              >
+                
+                {/* PHD Header panel */}
+                <div className="flex items-center justify-between gap-4 p-5 border-b border-pink-200/50 dark:border-pink-900/35 bg-gradient-to-r from-[#D38C9D] to-[#A55166] text-white">
                 <div className="flex items-center gap-3">
                   <span className="text-3xl bg-white/20 p-2.5 rounded-2xl">📋</span>
                   <div>
@@ -4129,29 +4735,52 @@ export default function App() {
                     </div>
 
                     {/* Quick Search */}
-                    <div className="relative mb-2">
-                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#D38C9D]" size={16} />
-                      <input
-                        type="text"
-                        value={phdSearchQuery}
-                        onChange={(e) => {
-                          setPhdSearchQuery(e.target.value);
-                          setPhdSelectedRoomId(null); // Clear selected category if user typing search
-                        }}
-                        placeholder="Tìm kiếm danh tính bác sĩ hoặc tác nhân chẩn đoán trực quan..."
-                        className="w-full py-2.5 pl-10 pr-4 rounded-full border-2 border-[#E2B4C1] bg-white dark:bg-black/40 text-xs font-semibold focus:border-[#A55166] outline-none"
-                      />
+                    <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#D38C9D]" size={16} />
+                        <input
+                          type="text"
+                          value={phdSearchQuery}
+                          onChange={(e) => {
+                            setPhdSearchQuery(e.target.value);
+                            setPhdSelectedRoomId(null); // Clear selected category if user typing search
+                          }}
+                          placeholder="Tìm kiếm danh tính bác sĩ..."
+                          className="w-full py-2.5 pl-10 pr-4 rounded-full border-2 border-[#E2B4C1] bg-white dark:bg-black/40 text-xs font-semibold focus:border-[#A55166] outline-none"
+                        />
+                      </div>
+
+                      {/* Top Đánh Giá Filter Button */}
+                      <button
+                        type="button"
+                        onClick={() => setPhdSortByRating(!phdSortByRating)}
+                        className={`px-4 py-2 rounded-full border-2 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                          phdSortByRating 
+                            ? "bg-amber-50 border-amber-400 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                            : "bg-white dark:bg-black/20 border-[#E2B4C1] text-gray-600 dark:text-gray-300 hover:bg-rose-50/50"
+                        }`}
+                        title="Ưu tiên tìm kiếm các bác sĩ có điểm đánh giá cao từ cộng đồng"
+                      >
+                        <span>⭐ Top Đánh Giá</span>
+                        {phdSortByRating && <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full">Bật</span>}
+                      </button>
                     </div>
 
                     {/* Filter results or departments layout depending on search state */}
                     {phdSearchQuery.trim() !== "" ? (
                       <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Kết quả chẩn tuyển ({prompts.filter(p => p.name.toLowerCase().includes(phdSearchQuery.toLowerCase()) || p.description.toLowerCase().includes(phdSearchQuery.toLowerCase())).length})</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">
+                          Kết quả chẩn tuyển ({prompts.filter(p => p.name.toLowerCase().includes(phdSearchQuery.toLowerCase()) || p.description.toLowerCase().includes(phdSearchQuery.toLowerCase())).length})
+                        </span>
                         <div className="flex flex-col gap-2.5">
-                          {prompts
-                            .filter(p => p.name.toLowerCase().includes(phdSearchQuery.toLowerCase()) || p.description.toLowerCase().includes(phdSearchQuery.toLowerCase()))
-                            .map(p => {
+                          {(() => {
+                            const filtered = prompts.filter(p => p.name.toLowerCase().includes(phdSearchQuery.toLowerCase()) || p.description.toLowerCase().includes(phdSearchQuery.toLowerCase()));
+                            if (phdSortByRating) {
+                              filtered.sort((a, b) => getPromptAvgRating(b.id) - getPromptAvgRating(a.id));
+                            }
+                            return filtered.map(p => {
                               const roomCat = categories.find(c => c.id === p.category);
+                              const rating = getPromptAvgRating(p.id);
                               return (
                                 <div 
                                   key={p.id}
@@ -4161,13 +4790,21 @@ export default function App() {
                                   className="p-3 bg-[#F7DAE7]/20 border border-[#E2B4C1]/50 rounded-xl hover:bg-[#E2B4C1]/20 cursor-pointer transition-all flex items-center justify-between"
                                 >
                                   <div>
-                                    <span className="font-bold text-xs text-gray-800 dark:text-gray-100">{p.icon} {p.name}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-xs text-gray-800 dark:text-gray-100">{p.icon} {p.name}</span>
+                                      {rating > 0 && (
+                                        <span className="text-[10px] text-amber-500 font-extrabold flex items-center gap-0.5">
+                                          ⭐ {rating.toFixed(1)}
+                                        </span>
+                                      )}
+                                    </div>
                                     <span className="text-[10px] text-[#A55166] block mt-0.5">{roomCat?.icon} {roomCat?.name}</span>
                                   </div>
                                   <span className="text-[10px] font-bold text-[#A55166] underline">Liên hệ →</span>
                                 </div>
                               );
-                            })}
+                            });
+                          })()}
 
                           {prompts.filter(p => p.name.toLowerCase().includes(phdSearchQuery.toLowerCase()) || p.description.toLowerCase().includes(phdSearchQuery.toLowerCase())).length === 0 && (
                             <p className="text-center text-xs text-gray-400 py-3">Không tìm thấy chatbot / bác sỹ nào tương ứng.</p>
@@ -4216,18 +4853,34 @@ export default function App() {
                           <div className="mt-4 p-4 rounded-2xl bg-rose-50/50 dark:bg-black/30 border border-[#E2B4C1]/40">
                             <span className="text-xs font-bold text-[#A55166] uppercase block mb-2">📋 Đội ngũ y khoa trực thuộc ({prompts.filter(p => p.category === phdSelectedRoomId).length}):</span>
                             <div className="flex flex-col gap-2">
-                              {prompts.filter(p => p.category === phdSelectedRoomId).map(p => (
-                                <div 
-                                  key={p.id}
-                                  onClick={() => {
-                                    selectDoctorAndNavigate(p);
-                                  }}
-                                  className="p-2 bg-white dark:bg-black/20 hover:bg-rose-100 rounded-xl cursor-pointer transition-all text-xs font-bold flex justify-between items-center text-gray-800 dark:text-gray-200"
-                                >
-                                  <span>{p.icon} {p.name}</span>
-                                  <span className="text-[9px] underline text-[#A55166]">Liên hệ →</span>
-                                </div>
-                              ))}
+                              {(() => {
+                                const list = prompts.filter(p => p.category === phdSelectedRoomId);
+                                if (phdSortByRating) {
+                                  list.sort((a, b) => getPromptAvgRating(b.id) - getPromptAvgRating(a.id));
+                                }
+                                return list.map(p => {
+                                  const rating = getPromptAvgRating(p.id);
+                                  return (
+                                    <div 
+                                      key={p.id}
+                                      onClick={() => {
+                                        selectDoctorAndNavigate(p);
+                                      }}
+                                      className="p-2.5 bg-white dark:bg-black/20 hover:bg-rose-100 rounded-xl cursor-pointer transition-all text-xs font-bold flex justify-between items-center text-gray-800 dark:text-gray-200"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span>{p.icon} {p.name}</span>
+                                        {rating > 0 && (
+                                          <span className="text-[10px] text-amber-500 font-extrabold">
+                                            ⭐ {rating.toFixed(1)}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-[9px] underline text-[#A55166]">Liên hệ →</span>
+                                    </div>
+                                  );
+                                });
+                              })()}
                               {prompts.filter(p => p.category === phdSelectedRoomId).length === 0 && (
                                 <p className="text-[11px] text-gray-400 italic">Chưa có điều dưỡng/bác sỹ trực tại khoa này.</p>
                               )}
@@ -4455,7 +5108,6 @@ export default function App() {
                             <option key={c.id} value={c.id}>{c.icon} {c.name} ({pCount} người)</option>
                           );
                         })}
-                        <option value="unassigned">⚠️ Khoa khác / Chưa phân khoa ({phdRecords.filter(r => !r.cat || !categories.some(c => c.id === r.cat)).length} người)</option>
                       </select>
                     </div>
 
@@ -4490,19 +5142,6 @@ export default function App() {
                           </button>
                         );
                       })}
-                      {phdRecords.some(r => !r.cat || !categories.some(c => c.id === r.cat)) && (
-                        <button
-                          type="button"
-                          onClick={() => setPhdRecordFilter("unassigned")}
-                          className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
-                            phdRecordFilter === "unassigned"
-                              ? "bg-[#A55166] text-white shadow-sm"
-                              : "bg-[#F7DAE7]/40 dark:bg-white/10 text-gray-700 dark:text-gray-300 hover:bg-[#F7DAE7]/70"
-                          }`}
-                        >
-                          <span>⚠️ Khác ({phdRecords.filter(r => !r.cat || !categories.some(c => c.id === r.cat)).length})</span>
-                        </button>
-                      )}
                     </div>
 
                     {/* Records visual render */}
@@ -4518,9 +5157,7 @@ export default function App() {
                             String(r.id).toLowerCase().includes(phdRecordSearch.toLowerCase());
                           const matchesFilter = !phdRecordFilter 
                             ? true 
-                            : phdRecordFilter === "unassigned"
-                              ? (!r.cat || !categories.some(c => c.id === r.cat))
-                              : r.cat === phdRecordFilter;
+                            : r.cat === phdRecordFilter;
                           return matchesSearch && matchesFilter;
                         });
 
@@ -4543,11 +5180,6 @@ export default function App() {
                             groupedRecords.push({ cat: c, items });
                           }
                         });
-
-                        const unassigned = finalRecords.filter(r => !r.cat || !categories.some(c => c.id === r.cat));
-                        if (unassigned.length > 0) {
-                          groupedRecords.push({ cat: null, items: unassigned });
-                        }
 
                         return groupedRecords.map(({ cat: groupCat, items }) => (
                           <div key={groupCat ? groupCat.id : "unassigned"} className="flex flex-col gap-2 mb-2">
@@ -4584,7 +5216,7 @@ export default function App() {
                                         <div className="w-5 h-5 rounded-full bg-pink-100 dark:bg-pink-950/60 flex items-center justify-center text-[#A55166] dark:text-pink-300">
                                           <User size={11} />
                                         </div>
-                                        <span className="font-extrabold text-sm text-gray-800 dark:text-gray-100">{r.name || "Bệnh nhân ẩn danh"}</span>
+                                        <span className="font-extrabold text-sm sm:text-base text-gray-800 dark:text-gray-100 leading-tight">{r.name || "Bệnh nhân ẩn danh"}</span>
                                         <span className="text-[10px] md:text-[9px] uppercase tracking-wide font-black text-white bg-gradient-to-r from-pink-500 to-rose-600 px-2.5 py-0.5 rounded-full shadow-xs">
                                           {recordCat ? `${recordCat.icon} ${recordCat.name}` : "🏥 Chưa phân khoa"}
                                         </span>
@@ -4664,7 +5296,7 @@ export default function App() {
                                           <span className="text-[10px] md:text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Triệu chứng chẩn y trị học:</span>
                                           <div className="flex flex-wrap gap-1.5 mt-1">
                                             {symptoms.map(s => (
-                                              <span key={s} className="text-xs md:text-[10px] font-bold bg-rose-50/70 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 px-2.5 py-1 rounded-lg border border-rose-100/50 dark:border-pink-900/15">
+                                              <span key={s} className="text-sm sm:text-base font-bold bg-rose-50/70 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 px-3 py-1.5 rounded-lg border border-rose-100/50 dark:border-pink-900/15 leading-relaxed">
                                                 {s}
                                               </span>
                                             ))}
@@ -4676,7 +5308,7 @@ export default function App() {
 
                                         <div className="flex flex-col gap-1.5 text-sm md:text-xs">
                                           <span className="text-[10px] md:text-[9px] text-[#A55166] dark:text-[#E2B4C1] font-bold uppercase tracking-wider">Lời tự thuật chi tiết hành vi:</span>
-                                          <p className="text-gray-600 dark:text-gray-350 leading-relaxed md:leading-relaxed italic bg-pink-100/10 dark:bg-black/25 p-3.5 rounded-xl border border-pink-100/30 dark:border-pink-900/10 font-medium text-sm md:text-xs">
+                                          <p className="text-gray-650 dark:text-gray-300 leading-relaxed sm:leading-loose italic bg-pink-100/10 dark:bg-black/25 p-3.5 sm:p-4 rounded-xl border border-pink-100/30 dark:border-pink-900/10 font-semibold text-sm sm:text-base">
                                             "{r.note || "(Không ghi chép hành vi)"}"
                                           </p>
                                         </div>
@@ -4714,6 +5346,7 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+      )}
 
       {/* POPUP CONFIRM LOGOUT */}
       <AnimatePresence>

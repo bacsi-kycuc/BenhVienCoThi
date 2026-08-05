@@ -54,6 +54,20 @@ service cloud.firestore {
         && data.enabled is bool;
     }
 
+    // Feedback schema validation helper
+    function isValidFeedback(data) {
+      return data.keys().hasAll(['id', 'promptId', 'author', 'comment', 'rating', 'timestamp'])
+        && data.id is string && data.id.size() <= 128
+        && data.promptId is number
+        && data.author is string && data.author.size() <= 200
+        && data.comment is string && data.comment.size() <= 5000
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.timestamp is string && data.timestamp.size() <= 100
+        && (!data.keys().contains('isReported') || data.isReported is bool)
+        && (!data.keys().contains('reportedReason') || (data.reportedReason is string && data.reportedReason.size() <= 2000))
+        && (!data.keys().contains('reportedAt') || (data.reportedAt is string && data.reportedAt.size() <= 100));
+    }
+
     // Paths matching rules
     match /categories/{categoryId} {
       allow read: if true;
@@ -76,6 +90,12 @@ service cloud.firestore {
     match /config/{configId} {
       allow read: if true;
       allow create, update: if isValidConfig(request.resource.data);
+      allow delete: if true;
+    }
+
+    match /feedbacks/{feedbackId} {
+      allow read: if true;
+      allow create, update: if isValidFeedback(request.resource.data);
       allow delete: if true;
     }
   }

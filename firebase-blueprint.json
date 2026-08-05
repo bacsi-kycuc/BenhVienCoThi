@@ -135,6 +135,50 @@
         }
       },
       "required": ["enabled"]
+    },
+    "feedback": {
+      "title": "Feedback",
+      "description": "Patient reviews and comments left for specific prompts/nurses",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique feedback ID"
+        },
+        "promptId": {
+          "type": "number",
+          "description": "Linked doctor/nurse prompt identifier"
+        },
+        "author": {
+          "type": "string",
+          "description": "Patient pseudonym or Anonymous name"
+        },
+        "comment": {
+          "type": "string",
+          "description": "Detailed comment, suggestion, or warm greetings"
+        },
+        "rating": {
+          "type": "number",
+          "description": "Star rating from 1 to 5 stars"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO date-time or formatted string representing submission"
+        },
+        "isReported": {
+          "type": "boolean",
+          "description": "Flag indicating if this feedback was reported by a user"
+        },
+        "reportedReason": {
+          "type": "string",
+          "description": "Reason for report, if any"
+        },
+        "reportedAt": {
+          "type": "string",
+          "description": "Timestamp of report"
+        }
+      },
+      "required": ["id", "promptId", "author", "comment", "rating", "timestamp"]
     }
   },
   "firestore": {
@@ -153,6 +197,10 @@
     "config": {
       "schema": "config",
       "description": "System configuration documents"
+    },
+    "feedbacks": {
+      "schema": "feedback",
+      "description": "Patient feedback and evaluation collection"
     }
   }
 }
