@@ -6,97 +6,25 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Global ID check helper
-    function isValidDocId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    // Category schema validation helper
-    function isValidCategory(data) {
-      return data.keys().hasAll(['id', 'icon', 'name'])
-        && data.id is string && data.id.size() <= 100
-        && data.icon is string && data.icon.size() <= 50
-        && data.name is string && data.name.size() <= 200
-        && (!data.keys().contains('description') || (data.description is string && data.description.size() <= 2000))
-        && (!data.keys().contains('location') || (data.location is string && data.location.size() <= 500));
-    }
-
-    // Prompt schema validation helper
-    function isValidPrompt(data) {
-      return data.keys().hasAll(['id', 'name', 'category', 'icon', 'url', 'description', 'tags'])
-        && data.id is number
-        && data.name is string && data.name.size() <= 300
-        && data.category is string && data.category.size() <= 100
-        && data.icon is string && data.icon.size() <= 100
-        && data.url is string && data.url.size() <= 1500
-        && data.description is string && data.description.size() <= 10000
-        && data.tags is list
-        && (!data.keys().contains('passwordFailLimit') || data.passwordFailLimit is number)
-        && (!data.keys().contains('passwordFailGifUrl') || (data.passwordFailGifUrl is string && data.passwordFailGifUrl.size() <= 3000000))
-        && (!data.keys().contains('passwordFailSoundUrl') || (data.passwordFailSoundUrl is string && data.passwordFailSoundUrl.size() <= 3000000));
-    }
-
-    // MedicalRecord schema validation helper
-    function isValidMedicalRecord(data) {
-      return data.keys().hasAll(['id', 'name', 'age', 'cat', 'note', 'symptoms', 'date'])
-        && data.id is number
-        && data.name is string && data.name.size() <= 300
-        && data.age is string && data.age.size() <= 100
-        && data.cat is string && data.cat.size() <= 100
-        && data.note is string && data.note.size() <= 10000
-        && data.symptoms is list
-        && data.date is string && data.date.size() <= 100;
-    }
-
-    // Config schema validation helper
-    function isValidConfig(data) {
-      return data.keys().hasAll(['enabled'])
-        && data.enabled is bool;
-    }
-
-    // Feedback schema validation helper
-    function isValidFeedback(data) {
-      return data.keys().hasAll(['id', 'promptId', 'author', 'comment', 'rating', 'timestamp'])
-        && data.id is string && data.id.size() <= 128
-        && data.promptId is number
-        && data.author is string && data.author.size() <= 200
-        && data.comment is string && data.comment.size() <= 5000
-        && data.rating is number && data.rating >= 1 && data.rating <= 5
-        && data.timestamp is string && data.timestamp.size() <= 100
-        && (!data.keys().contains('isReported') || data.isReported is bool)
-        && (!data.keys().contains('reportedReason') || (data.reportedReason is string && data.reportedReason.size() <= 2000))
-        && (!data.keys().contains('reportedAt') || (data.reportedAt is string && data.reportedAt.size() <= 100));
-    }
-
-    // Paths matching rules
     match /categories/{categoryId} {
-      allow read: if true;
-      allow create, update: if isValidCategory(request.resource.data);
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     match /prompts/{promptId} {
-      allow read: if true;
-      allow create, update: if isValidPrompt(request.resource.data);
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     match /phdRecords/{recordId} {
-      allow read: if true;
-      allow create, update: if isValidMedicalRecord(request.resource.data);
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     match /config/{configId} {
-      allow read: if true;
-      allow create, update: if isValidConfig(request.resource.data);
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     match /feedbacks/{feedbackId} {
-      allow read: if true;
-      allow create, update: if isValidFeedback(request.resource.data);
-      allow delete: if true;
+      allow read, write: if true;
     }
   }
 }
+

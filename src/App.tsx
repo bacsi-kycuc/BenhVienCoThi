@@ -330,7 +330,7 @@ export function PromptCard({
               <span>{p.updatedAt ?? "2 ngày trước"}</span>
             </span>
             {(() => {
-              const promptFeedbacks = (feedbacks || []).filter(f => f.promptId === p.id);
+              const promptFeedbacks = (feedbacks || []).filter(f => String(f.promptId) === String(p.id));
               const feedbackCount = promptFeedbacks.length;
               const avgRating = feedbackCount > 0 
                 ? (promptFeedbacks.reduce((sum, f) => sum + f.rating, 0) / feedbackCount).toFixed(1) 
@@ -665,7 +665,7 @@ export default function App() {
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState<boolean>(false);
 
   const getPromptAvgRating = (pId: number): number => {
-    const promptFeedbacks = feedbacks.filter(f => f.promptId === pId);
+    const promptFeedbacks = feedbacks.filter(f => String(f.promptId) === String(pId));
     if (promptFeedbacks.length === 0) return 0;
     return promptFeedbacks.reduce((sum, f) => sum + f.rating, 0) / promptFeedbacks.length;
   };
@@ -1339,69 +1339,81 @@ export default function App() {
       : (feedbackNickname.trim() || "Bệnh nhân ẩn danh");
 
     const feedbackId = "fb_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11);
-    const newFeedback: Feedback = {
-      id: feedbackId,
-      promptId: selectedFeedbackPrompt.id,
-      author: authorName,
-      comment: feedbackComment.trim(),
-      rating: feedbackRating,
-      timestamp: new Date().toISOString(),
-      isReported: false
-    };
+      const promptIdNum = Number(selectedFeedbackPrompt.id);
+      const newFeedback: Feedback = {
+        id: feedbackId,
+        promptId: isNaN(promptIdNum) ? (selectedFeedbackPrompt.id as any) : promptIdNum,
+        author: authorName,
+        comment: feedbackComment.trim(),
+        rating: feedbackRating,
+        timestamp: new Date().toISOString(),
+        isReported: false
+      };
 
-    try {
-      await setDoc(doc(db, "feedbacks", feedbackId), newFeedback);
-      addToast("Gửi lời gửi gắm thành công! Cảm ơn bé đã chia sẻ nhé 🌸", "success");
-      
-      // Trigger lovely firework explosion Confetti effect
-      setPhdConfettiActive(true);
-      
-      // Reset form states
-      setFeedbackComment("");
-      setFeedbackNickname("");
-      setFeedbackRating(5);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `feedbacks/${feedbackId}`);
-    } finally {
-      setIsSubmittingFeedback(false);
-    }
+      setFeedbacks(prev => [newFeedback, ...prev.filter(f => f.id !== newFeedback.id)]);
+
+      try {
+        await setDoc(doc(db, "feedbacks", feedbackId), newFeedback);
+        addToast("Gửi nhận xét thành công! Cảm ơn bé đã chia sẻ nhé 🌸", "success");
+        
+        // Trigger lovely firework explosion Confetti effect
+        setPhdConfettiActive(true);
+        
+        // Reset form states and switch to view history tab
+        setFeedbackComment("");
+        setFeedbackNickname("");
+        setFeedbackRating(5);
+        setFeedbackSubTab("view");
+      } catch (err) {
+        setFeedbacks(prev => prev.filter(f => f.id !== newFeedback.id));
+        handleFirestoreError(err, OperationType.WRITE, `feedbacks/${feedbackId}`);
+      } finally {
+        setIsSubmittingFeedback(false);
+      }
   };
 
   const handleReportFeedback = async (fb: Feedback) => {
-    const updatedFeedback = {
+    const updatedFeedback: Feedback = {
       ...fb,
       isReported: true,
       reportedReason: "Phản hồi không phù hợp",
       reportedAt: new Date().toISOString()
     };
+    setFeedbacks(prev => prev.map(f => f.id === fb.id ? updatedFeedback : f));
     try {
       await setDoc(doc(db, "feedbacks", fb.id), updatedFeedback);
       addToast("Đã báo cáo kiểm duyệt phản hồi này đến Admin!", "success");
     } catch (err) {
+      setFeedbacks(prev => prev.map(f => f.id === fb.id ? fb : f));
       handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fb.id}`);
     }
   };
 
   const handleDismissReport = async (fb: Feedback) => {
-    const updatedFeedback = {
+    const updatedFeedback: Feedback = {
       ...fb,
       isReported: false
     };
     delete updatedFeedback.reportedReason;
     delete updatedFeedback.reportedAt;
+    setFeedbacks(prev => prev.map(f => f.id === fb.id ? updatedFeedback : f));
     try {
       await setDoc(doc(db, "feedbacks", fb.id), updatedFeedback);
       addToast("Đã gỡ báo cáo thành công!", "success");
     } catch (err) {
+      setFeedbacks(prev => prev.map(f => f.id === fb.id ? fb : f));
       handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fb.id}`);
     }
   };
 
   const handleDeleteFeedback = async (fbId: string) => {
+    const backupFeedbacks = [...feedbacks];
+    setFeedbacks(prev => prev.filter(f => f.id !== fbId));
     try {
       await deleteDoc(doc(db, "feedbacks", fbId));
       addToast("Đã xóa phản hồi thành công!", "success");
     } catch (err) {
+      setFeedbacks(backupFeedbacks);
       handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fbId}`);
     }
   };
@@ -2043,11 +2055,10 @@ export default function App() {
   };
 
   const handleDeleteCategory = (id: string) => {
-    if (confirm("Xóa phòng này sẽ gỡ bỏ phân loại của các bác sĩ. Tiếp tục?")) {
-      deleteDoc(doc(db, "categories", id))
-        .catch(err => handleFirestoreError(err, OperationType.DELETE, `categories/${id}`));
+    deleteDoc(doc(db, "categories", id))
+      .catch(err => handleFirestoreError(err, OperationType.DELETE, `categories/${id}`));
 
-      const remainingCats = categories.filter(c => c.id !== id);
+    const remainingCats = categories.filter(c => c.id !== id);
       const fallbackCat = remainingCats.length > 0 ? remainingCats[0].id : "";
 
       // Re-assign category of prompts belonging to deleted category to first remaining or empty
@@ -2058,7 +2069,6 @@ export default function App() {
             .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${p.id}`));
         }
       });
-    }
   };
 
   // Safe file reads to prevent local QuotaExceeded errors
@@ -4142,7 +4152,7 @@ export default function App() {
                     feedbackSubTab === "view" ? "text-rose-800 dark:text-rose-300" : "text-gray-400 hover:text-rose-500"
                   }`}
                 >
-                  <span className="relative z-10">Lịch sử ({feedbacks.filter(f => f.promptId === selectedFeedbackPrompt.id).length})</span>
+                  <span className="relative z-10">Lịch sử ({feedbacks.filter(f => String(f.promptId) === String(selectedFeedbackPrompt.id)).length})</span>
                   {feedbackSubTab === "view" && (
                     <motion.div
                       layoutId="activeFeedbackSubTabLine"
@@ -4173,14 +4183,14 @@ export default function App() {
               <div className="flex-1 overflow-y-auto pr-1">
                 {feedbackSubTab === "view" ? (
                   <div className="flex flex-col gap-3 pb-2">
-                    {feedbacks.filter(f => f.promptId === selectedFeedbackPrompt.id).length === 0 ? (
+                    {feedbacks.filter(f => String(f.promptId) === String(selectedFeedbackPrompt.id)).length === 0 ? (
                       <div className="text-center py-12 text-gray-400">
                         <p className="text-xs font-bold text-gray-700 dark:text-gray-200">Chưa có lời nhận xét nào.</p>
                         <p className="text-[11px] text-gray-400 dark:text-gray-400 mt-1">Hãy là người đầu tiên nha bé!</p>
                       </div>
                     ) : (
                       feedbacks
-                        .filter(f => f.promptId === selectedFeedbackPrompt.id)
+                        .filter(f => String(f.promptId) === String(selectedFeedbackPrompt.id))
                         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                         .map(f => {
                           const dateObj = new Date(f.timestamp);
@@ -4233,11 +4243,7 @@ export default function App() {
                                 {isLoggedIn && (
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      if (confirm("Bạn có chắc muốn xóa phản hồi này vĩnh viễn?")) {
-                                        handleDeleteFeedback(f.id);
-                                      }
-                                    }}
+                                    onClick={() => handleDeleteFeedback(f.id)}
                                     className="text-[9px] font-extrabold text-red-500 hover:text-red-700 transition-colors flex items-center gap-0.5 cursor-pointer bg-transparent border-0"
                                     title="Admin xóa phản hồi"
                                   >
@@ -4401,7 +4407,7 @@ export default function App() {
                     {feedbacks
                       .filter(f => f.isReported)
                       .map(f => {
-                        const associatedPrompt = prompts.find(p => p.id === f.promptId);
+                        const associatedPrompt = prompts.find(p => String(p.id) === String(f.promptId));
                         const reportDate = f.reportedAt ? new Date(f.reportedAt) : null;
                         const formattedTime = reportDate && !isNaN(reportDate.getTime())
                           ? `${reportDate.getDate()}/${reportDate.getMonth() + 1} ${reportDate.getHours()}:${String(reportDate.getMinutes()).padStart(2, "0")}`
@@ -4455,11 +4461,7 @@ export default function App() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (confirm("Xóa vĩnh viễn lời nhắn này?")) {
-                                    handleDeleteFeedback(f.id);
-                                  }
-                                }}
+                                onClick={() => handleDeleteFeedback(f.id)}
                                 className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-[10px] shadow-sm flex items-center gap-1 cursor-pointer transition-colors border-0"
                               >
                                 🗑️ Xóa phản hồi xấu
