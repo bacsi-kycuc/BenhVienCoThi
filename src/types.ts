@@ -66,3 +66,11 @@ export interface Feedback {
   reportedAt?: string;
 }
 
+export interface QrConfig {
+  enabled: boolean;
+  imageUrl: string;
+  title?: string;
+  note: string;
+  updatedAt?: string;
+}
+

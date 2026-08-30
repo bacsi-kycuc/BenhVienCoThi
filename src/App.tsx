@@ -5,7 +5,8 @@ import {
   Prompt, 
   MedicalRecord,
   Sticker,
-  Feedback
+  Feedback,
+  QrConfig
 } from "./types";
 import { 
   DEFAULT_CATEGORIES, 
@@ -53,7 +54,11 @@ import {
   ChevronsRight,
   ArrowUp,
   Star,
-  AlertTriangle
+  AlertTriangle,
+  QrCode,
+  Download,
+  Copy,
+  Check
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { PastelStickerComponents } from "./components/PastelStickers";
@@ -1011,12 +1016,29 @@ export default function App() {
       handleFirestoreError(err, OperationType.LIST, "feedbacks");
     });
 
+    // 6. Subscribe to QR Code Configuration
+    const unsubQr = onSnapshot(doc(db, "config", "qr"), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data() as QrConfig;
+        setQrConfig({
+          enabled: !!data.enabled,
+          imageUrl: data.imageUrl || "",
+          title: data.title || "Mã QR Viện Tâm Thần Cố Thị",
+          note: data.note || "",
+          updatedAt: data.updatedAt
+        });
+      }
+    }, (err) => {
+      console.warn("Failed to listen to QR config:", err);
+    });
+
     return () => {
       unsubCats();
       unsubPrompts();
       unsubRecords();
       unsubMaintenance();
       unsubFeedbacks();
+      unsubQr();
     };
   }, []);
 
@@ -1084,6 +1106,25 @@ export default function App() {
   const [facebookUrl, setFacebookUrl] = useState<string>(() => {
     return localStorage.getItem("facebookUrl") || "https://facebook.com";
   });
+
+  // QR Code Settings State
+  const [qrConfig, setQrConfig] = useState<QrConfig>(() => {
+    try {
+      const saved = localStorage.getItem("qr_config_backup");
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return {
+      enabled: false,
+      imageUrl: "",
+      title: "Mã QR Viện Tâm Thần Cố Thị",
+      note: ""
+    };
+  });
+  const [showQrModal, setShowQrModal] = useState<boolean>(false);
+  const [copiedQrNote, setCopiedQrNote] = useState<boolean>(false);
+  const [isSavingQr, setIsSavingQr] = useState<boolean>(false);
 
   // Music Player State
   const [musicUrl, setMusicUrl] = useState<string>(() => {
@@ -2092,6 +2133,42 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
+  // Save QR Code Config to Firestore & Local Storage
+  const handleSaveQrConfig = async (newConfig?: Partial<QrConfig>) => {
+    const configToSave: QrConfig = {
+      ...qrConfig,
+      ...(newConfig || {}),
+      updatedAt: new Date().toISOString()
+    };
+    setIsSavingQr(true);
+    try {
+      localStorage.setItem("qr_config_backup", JSON.stringify(configToSave));
+      setQrConfig(configToSave);
+      await setDoc(doc(db, "config", "qr"), configToSave);
+      addToast("Đã lưu cấu hình Mã QR thành công! 📱", "success");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, "config/qr");
+    } finally {
+      setIsSavingQr(false);
+    }
+  };
+
+  // Handle QR image file upload
+  const handleQrImageUpload = (file: File | null) => {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      addToast("Kích thước file ảnh lớn hơn 2MB. Xin hãy nén ảnh hoặc nạp link URL ảnh trực tiếp!", "warning");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setQrConfig(prev => ({ ...prev, imageUrl: dataUrl }));
+      addToast("Đã tải ảnh mã QR lên! Nhấn 'Lưu Cài Đặt Mã QR' để áp dụng.", "success");
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Handle Music Upload File
   const handleMusicUploadSubmit = (file: File | null) => {
     if (!file) return;
@@ -2443,6 +2520,22 @@ export default function App() {
           
           {/* Top navigation row - contains only the top-right controls */}
           <div className="w-full max-w-5xl flex justify-end items-center gap-3">
+            {/* QR Code Trigger Button */}
+            {(qrConfig.enabled || isLoggedIn) && (
+              <button 
+                type="button"
+                onClick={() => setShowQrModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-white/30 dark:bg-pink-950/45 hover:bg-white/50 text-[#A55166] dark:text-pink-200 border border-pink-300/30 text-xs sm:text-sm font-bold shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95"
+                title={qrConfig.title || "Xem mã QR & Ghi chú"}
+              >
+                <QrCode size={16} />
+                <span>Mã QR</span>
+                {!qrConfig.enabled && isLoggedIn && (
+                  <span className="text-[9px] bg-amber-500/90 px-1.5 py-0.2 rounded text-white font-black">(Admin)</span>
+                )}
+              </button>
+            )}
+
             {/* Dark/Light Mode Theme Switcher */}
             <button 
               type="button"
@@ -2605,6 +2698,22 @@ export default function App() {
                     <Settings size={14} /> Cài đặt
                   </button>
                 </>
+              )}
+
+              {/* QR Code Trigger Button */}
+              {(qrConfig.enabled || isLoggedIn) && (
+                <button 
+                  type="button"
+                  onClick={() => setShowQrModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 text-white font-bold text-xs shadow-sm transition-all cursor-pointer hover:scale-[1.02] active:scale-95 backdrop-blur-sm"
+                  title={qrConfig.title || "Xem mã QR & Ghi chú"}
+                >
+                  <QrCode size={15} className="text-pink-200" />
+                  <span className="hidden sm:inline">Mã QR</span>
+                  {!qrConfig.enabled && isLoggedIn && (
+                    <span className="text-[9px] bg-amber-500/90 px-1 py-0.2 rounded text-white font-black">(Admin)</span>
+                  )}
+                </button>
               )}
 
               <button 
@@ -3794,6 +3903,144 @@ export default function App() {
 
                     <div className="border-t border-pink-100 dark:border-pink-900/40 my-1 font-serif italic" />
 
+                    {/* QR CODE SETTINGS SECTION */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide">📱 MÃ QR & GHI CHÚ THÔNG BÁO</span>
+                          {qrConfig.enabled && (
+                            <span className="px-2 py-0.5 text-[9px] font-black bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded-full border border-emerald-300 dark:border-emerald-800">
+                              Đang hiển thị
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextState = !qrConfig.enabled;
+                            handleSaveQrConfig({ enabled: nextState });
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-extrabold cursor-pointer transition-all flex items-center gap-1.5 ${
+                            qrConfig.enabled
+                              ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm"
+                              : "bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-700"
+                          }`}
+                        >
+                          {qrConfig.enabled ? "✅ Bật hiển thị nút QR" : "⭕ Đang tắt hiển thị"}
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col gap-3.5 p-4 bg-white dark:bg-black/20 rounded-2xl border border-pink-100 dark:border-pink-900/30">
+                        {/* QR Code Title */}
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                            Tiêu đề hiển thị mã QR
+                          </label>
+                          <input
+                            type="text"
+                            value={qrConfig.title || ""}
+                            onChange={(e) => setQrConfig(prev => ({ ...prev, title: e.target.value }))}
+                            placeholder="Mã QR Quét Nhanh / Ủng Hộ Phòng Khám..."
+                            className="w-full py-2 px-3 text-xs rounded-xl border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 font-medium text-gray-800 dark:text-gray-200 outline-none focus:border-rose-400"
+                          />
+                        </div>
+
+                        {/* QR Code Image Upload & Direct URL */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+                          {/* Upload file */}
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                              Tải ảnh mã QR (PNG, JPG)
+                            </label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleQrImageUpload(e.target.files ? e.target.files[0] : null)}
+                              className="hidden"
+                              id="file-qr-upload"
+                            />
+                            <label
+                              htmlFor="file-qr-upload"
+                              className="cursor-pointer py-2 px-3 text-center bg-rose-50 hover:bg-rose-100/70 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 font-semibold text-xs border border-dashed border-rose-300 dark:border-rose-800 rounded-xl block transition-all"
+                            >
+                              📸 Chọn ảnh mã QR từ máy
+                            </label>
+                            <span className="text-[9px] text-gray-400 italic">Hỗ trợ ảnh QR Zalo, Momo, Ngân hàng, Discord, Link...</span>
+                          </div>
+
+                          {/* Or direct URL */}
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                              Hoặc dán Link URL ảnh QR
+                            </label>
+                            <input
+                              type="text"
+                              value={qrConfig.imageUrl || ""}
+                              onChange={(e) => setQrConfig(prev => ({ ...prev, imageUrl: e.target.value }))}
+                              placeholder="https://i.imgur.com/... hoặc link ảnh"
+                              className="w-full py-2 px-3 text-xs rounded-xl border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 font-medium text-gray-800 dark:text-gray-200 outline-none focus:border-rose-400"
+                            />
+                          </div>
+                        </div>
+
+                        {/* QR Preview & Actions */}
+                        {qrConfig.imageUrl && (
+                          <div className="flex items-center gap-3 p-2.5 bg-rose-50/50 dark:bg-rose-950/20 rounded-xl border border-rose-100 dark:border-rose-900/30">
+                            <div className="w-16 h-16 bg-white p-1 rounded-lg border border-pink-200 shadow-sm flex items-center justify-center shrink-0 overflow-hidden">
+                              <img
+                                src={qrConfig.imageUrl}
+                                alt="QR Preview"
+                                className="w-full h-full object-contain"
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                            <div className="flex-1 flex flex-col gap-0.5">
+                              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                <Check size={12} /> Đã có ảnh mã QR
+                              </span>
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400">Xem trước mã QR</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setQrConfig(prev => ({ ...prev, imageUrl: "" }))}
+                              className="px-2.5 py-1 text-[10px] text-red-500 hover:text-red-700 font-bold bg-white dark:bg-black/40 rounded-lg border border-red-200 dark:border-red-900/40 hover:bg-red-50 cursor-pointer"
+                            >
+                              Gỡ ảnh
+                            </button>
+                          </div>
+                        )}
+
+                        {/* QR Note / Description */}
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                            <span>Nội dung ghi chú kèm theo mã QR</span>
+                            <span className="text-[10px] font-normal text-gray-400">Giải thích cho mọi người biết mã QR này dùng để làm gì</span>
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={qrConfig.note || ""}
+                            onChange={(e) => setQrConfig(prev => ({ ...prev, note: e.target.value }))}
+                            placeholder="Ví dụ: Quét mã QR để tham gia nhóm cộng đồng hoặc ủng hộ viện phí duy trì website nha các bé 🌸..."
+                            className="w-full py-2 px-3 text-xs rounded-xl border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 font-medium text-gray-800 dark:text-gray-200 outline-none focus:border-rose-400 resize-none"
+                          />
+                        </div>
+
+                        {/* Save Button */}
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            disabled={isSavingQr}
+                            onClick={() => handleSaveQrConfig()}
+                            className="px-4 py-2 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <Sparkles size={13} /> {isSavingQr ? "Đang lưu..." : "Lưu Cài Đặt Mã QR"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-pink-100 dark:border-pink-900/40 my-1 font-serif italic" />
+
                     {/* Maintenance Mode configuration */}
                     <div>
                       <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-3">🛠️ CHẾ ĐỘ BẢO TRÌ</span>
@@ -4354,6 +4601,163 @@ export default function App() {
                   className="px-5 py-2 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold cursor-pointer border-0"
                 >
                   Đóng cửa sổ
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================== */}
+      {/* MODAL: QR CODE & NOTICE DISPLAY           */}
+      {/* ========================================== */}
+      <AnimatePresence>
+        {showQrModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 15 }}
+              transition={{ type: "spring", stiffness: 350, damping: 28 }}
+              className="bg-gradient-to-br from-[#FBF6F9] to-[#F5E6ED] dark:from-[#211A1D] dark:to-[#171113] p-5 sm:p-6 rounded-3xl border-2 border-pink-200 dark:border-pink-900 w-full max-w-md shadow-2xl flex flex-col overflow-hidden max-h-[90vh]"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center pb-3.5 border-b border-pink-100 dark:border-pink-900/40 flex-shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300 flex items-center justify-center border border-rose-200 dark:border-rose-800 shadow-sm">
+                    <QrCode size={18} />
+                  </div>
+                  <div>
+                    <h4 className="font-serif italic font-black text-rose-800 dark:text-rose-200 text-base leading-tight">
+                      {qrConfig.title || "Mã QR Viện Tâm Thần Cố Thị"}
+                    </h4>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold tracking-wide">
+                      Quét mã QR bằng Camera điện thoại hoặc ứng dụng
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(false)}
+                  className="p-1.5 rounded-full bg-rose-100 hover:bg-rose-200 dark:bg-rose-950 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 transition-colors cursor-pointer flex items-center justify-center w-7 h-7 border-0"
+                  title="Đóng bảng mã QR"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Scrollable Modal Content */}
+              <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col items-center gap-4 text-center">
+                {/* QR Image Container */}
+                {qrConfig.imageUrl ? (
+                  <div className="flex flex-col items-center gap-3 w-full">
+                    <div className="relative group p-3 bg-white rounded-2xl border-2 border-pink-200 dark:border-pink-800/80 shadow-lg max-w-[260px] w-full aspect-square flex items-center justify-center overflow-hidden">
+                      <img
+                        src={qrConfig.imageUrl}
+                        alt="QR Code"
+                        className="w-full h-full object-contain select-none"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+
+                    {/* Quick action buttons for QR image */}
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={qrConfig.imageUrl}
+                        download="vien-tam-than-co-thi-qr.png"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-black/40 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] font-bold border border-pink-200 dark:border-pink-900/50 shadow-sm flex items-center gap-1 transition-all cursor-pointer"
+                      >
+                        <Download size={13} /> Lưu ảnh QR
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-8 px-4 flex flex-col items-center justify-center text-center bg-white/60 dark:bg-black/20 rounded-2xl border border-dashed border-pink-200 dark:border-pink-900/40 w-full">
+                    <span className="text-4xl mb-2 animate-bounce">📱</span>
+                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300">Chưa có hình ảnh mã QR</p>
+                    <p className="text-[10px] text-gray-400 mt-1 max-w-xs">
+                      {isLoggedIn
+                        ? "Ban quản trị có thể tải ảnh mã QR hoặc dán link ảnh trong phần Cài đặt chung!"
+                        : "Ban quản trị viện đang chuẩn bị cập nhật mã QR. Vui lòng quay lại sau nha!"}
+                    </p>
+                  </div>
+                )}
+
+                {/* QR Note / Description */}
+                {qrConfig.note && (
+                  <div className="w-full text-left p-3.5 bg-rose-50/80 dark:bg-rose-950/30 rounded-2xl border border-rose-100 dark:border-rose-900/40 relative">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                        📝 Ghi chú từ Viện Cố Thị:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!qrConfig.note) return;
+                          navigator.clipboard.writeText(qrConfig.note);
+                          setCopiedQrNote(true);
+                          addToast("Đã sao chép nội dung ghi chú!", "success");
+                          setTimeout(() => setCopiedQrNote(false), 2000);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-white dark:bg-black/40 text-gray-600 dark:text-gray-300 hover:text-rose-600 text-[10px] font-bold border border-pink-200 dark:border-pink-900/50 flex items-center gap-1 cursor-pointer transition-all"
+                        title="Sao chép toàn bộ ghi chú"
+                      >
+                        {copiedQrNote ? (
+                          <>
+                            <Check size={11} className="text-emerald-500" />
+                            <span className="text-emerald-600">Đã chép</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={11} />
+                            <span>Sao chép</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-700 dark:text-gray-200 leading-relaxed font-medium whitespace-pre-line break-words">
+                      {qrConfig.note}
+                    </p>
+                  </div>
+                )}
+
+                {/* Status notice when disabled but visible to admin */}
+                {!qrConfig.enabled && isLoggedIn && (
+                  <div className="w-full p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-xl text-left flex items-center gap-2">
+                    <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                    <span className="text-[10px] text-amber-700 dark:text-amber-300 font-medium">
+                      Mã QR này đang ở chế độ <b>TẮT hiển thị công khai</b>. Chỉ có Admin mới nhìn thấy nút này.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="pt-3 border-t border-pink-100 dark:border-pink-900/40 flex items-center justify-between flex-shrink-0">
+                {isLoggedIn ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQrModal(false);
+                      setSettingsTab("general");
+                      setSettingsOpen(true);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-pink-100 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300 hover:bg-pink-200 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Settings size={13} /> Chỉnh sửa mã QR
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(false)}
+                  className="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-bold cursor-pointer transition-all"
+                >
+                  Đóng
                 </button>
               </div>
             </motion.div>
