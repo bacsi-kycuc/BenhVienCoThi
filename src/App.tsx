@@ -1125,6 +1125,9 @@ export default function App() {
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
   const [copiedQrNote, setCopiedQrNote] = useState<boolean>(false);
   const [isSavingQr, setIsSavingQr] = useState<boolean>(false);
+  const [qrImgError, setQrImgError] = useState<boolean>(false);
+  const [qrImgSizeKb, setQrImgSizeKb] = useState<number | null>(null);
+  const [isCompressingQr, setIsCompressingQr] = useState<boolean>(false);
 
   // Music Player State
   const [musicUrl, setMusicUrl] = useState<string>(() => {
@@ -2133,6 +2136,55 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
+  // Helper to compress QR code image to optimal dimensions and size for Firestore (<50KB)
+  const compressQrImage = (file: File): Promise<{ dataUrl: string; sizeKb: number }> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Lỗi khi đọc file ảnh từ máy."));
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("File không phải hình ảnh hợp lệ."));
+        img.onload = () => {
+          // Standard QR code square optimal size: max 600x600 px is ultra-sharp and compact
+          const MAX_DIM = 600;
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            reject(new Error("Trình duyệt không hỗ trợ Canvas để nén ảnh."));
+            return;
+          }
+          // Fill pure white background to ensure transparent PNG QR codes remain crisp in dark/light mode
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Use WebP with fallback to JPEG for extreme compression and clarity
+          let dataUrl = canvas.toDataURL("image/webp", 0.88);
+          if (!dataUrl.startsWith("data:image/webp")) {
+            dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+          }
+          const sizeKb = Math.round((dataUrl.length * 3 / 4) / 1024);
+          resolve({ dataUrl, sizeKb });
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   // Save QR Code Config to Firestore & Local Storage
   const handleSaveQrConfig = async (newConfig?: Partial<QrConfig>) => {
     const configToSave: QrConfig = {
@@ -2140,33 +2192,46 @@ export default function App() {
       ...(newConfig || {}),
       updatedAt: new Date().toISOString()
     };
+
+    // Safety check: ensure payload does not exceed Firestore's 1MB single-document limit
+    const jsonStr = JSON.stringify(configToSave);
+    if (jsonStr.length > 950 * 1024) {
+      addToast("Ảnh mã QR quá lớn (vượt quá 950KB). Hãy dùng nút 'Chọn ảnh từ máy' để hệ thống tự động nén tối ưu!", "warning");
+      return;
+    }
+
     setIsSavingQr(true);
     try {
-      localStorage.setItem("qr_config_backup", JSON.stringify(configToSave));
+      localStorage.setItem("qr_config_backup", jsonStr);
       setQrConfig(configToSave);
+      setQrImgError(false);
       await setDoc(doc(db, "config", "qr"), configToSave);
-      addToast("Đã lưu cấu hình Mã QR thành công! 📱", "success");
+      addToast("Đã lưu mã QR vào cơ sở dữ liệu Firestore vĩnh viễn! 📱✨", "success");
     } catch (err) {
+      console.error("Firestore QR save error:", err);
+      addToast("Lỗi khi lưu mã QR vào cơ sở dữ liệu Firestore! Vui lòng thử lại.", "warning");
       handleFirestoreError(err, OperationType.WRITE, "config/qr");
     } finally {
       setIsSavingQr(false);
     }
   };
 
-  // Handle QR image file upload
-  const handleQrImageUpload = (file: File | null) => {
+  // Handle QR image file upload with automatic compression
+  const handleQrImageUpload = async (file: File | null) => {
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      addToast("Kích thước file ảnh lớn hơn 2MB. Xin hãy nén ảnh hoặc nạp link URL ảnh trực tiếp!", "warning");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
+    setIsCompressingQr(true);
+    setQrImgError(false);
+    try {
+      const { dataUrl, sizeKb } = await compressQrImage(file);
       setQrConfig(prev => ({ ...prev, imageUrl: dataUrl }));
-      addToast("Đã tải ảnh mã QR lên! Nhấn 'Lưu Cài Đặt Mã QR' để áp dụng.", "success");
-    };
-    reader.readAsDataURL(file);
+      setQrImgSizeKb(sizeKb);
+      addToast(`Đã tối ưu & nén ảnh mã QR (~${sizeKb} KB)! Nhấn 'Lưu Cài Đặt Mã QR' để lưu vĩnh viễn 📱`, "success");
+    } catch (err) {
+      console.error("Compression error:", err);
+      addToast("Không thể xử lý ảnh mã QR. Vui lòng thử lại với ảnh PNG/JPG!", "warning");
+    } finally {
+      setIsCompressingQr(false);
+    }
   };
 
   // Handle Music Upload File
@@ -3950,22 +4015,27 @@ export default function App() {
                           {/* Upload file */}
                           <div className="flex flex-col gap-1.5">
                             <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
-                              Tải ảnh mã QR (PNG, JPG)
+                              Tải ảnh mã QR từ máy (PNG, JPG)
                             </label>
                             <input
                               type="file"
                               accept="image/*"
+                              disabled={isCompressingQr}
                               onChange={(e) => handleQrImageUpload(e.target.files ? e.target.files[0] : null)}
                               className="hidden"
                               id="file-qr-upload"
                             />
                             <label
                               htmlFor="file-qr-upload"
-                              className="cursor-pointer py-2 px-3 text-center bg-rose-50 hover:bg-rose-100/70 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 font-semibold text-xs border border-dashed border-rose-300 dark:border-rose-800 rounded-xl block transition-all"
+                              className={`cursor-pointer py-2 px-3 text-center bg-rose-50 hover:bg-rose-100/70 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 font-semibold text-xs border border-dashed border-rose-300 dark:border-rose-800 rounded-xl block transition-all ${
+                                isCompressingQr ? "opacity-60 pointer-events-none" : ""
+                              }`}
                             >
-                              📸 Chọn ảnh mã QR từ máy
+                              {isCompressingQr ? "⏳ Đang nén & tối ưu ảnh..." : "📸 Chọn ảnh mã QR từ máy"}
                             </label>
-                            <span className="text-[9px] text-gray-400 italic">Hỗ trợ ảnh QR Zalo, Momo, Ngân hàng, Discord, Link...</span>
+                            <span className="text-[9px] text-gray-400 italic">
+                              Hệ thống tự động nén tối ưu (chỉ ~30KB) để lưu vĩnh viễn trên cơ sở dữ liệu!
+                            </span>
                           </div>
 
                           {/* Or direct URL */}
@@ -3976,33 +4046,65 @@ export default function App() {
                             <input
                               type="text"
                               value={qrConfig.imageUrl || ""}
-                              onChange={(e) => setQrConfig(prev => ({ ...prev, imageUrl: e.target.value }))}
+                              onChange={(e) => {
+                                setQrConfig(prev => ({ ...prev, imageUrl: e.target.value }));
+                                setQrImgError(false);
+                              }}
                               placeholder="https://i.imgur.com/... hoặc link ảnh"
                               className="w-full py-2 px-3 text-xs rounded-xl border border-pink-200 dark:border-pink-900 bg-white dark:bg-black/40 font-medium text-gray-800 dark:text-gray-200 outline-none focus:border-rose-400"
                             />
                           </div>
                         </div>
 
+                        {/* Discord Link Warning */}
+                        {(qrConfig.imageUrl?.includes("cdn.discordapp.com") || qrConfig.imageUrl?.includes("media.discordapp.net")) && (
+                          <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-200 text-[11px] leading-relaxed flex items-start gap-2">
+                            <AlertTriangle size={15} className="shrink-0 text-amber-600 mt-0.5" />
+                            <span>
+                              <strong>Lưu ý quan trọng:</strong> Bạn đang dùng link ảnh của Discord. Discord có chính sách tự động hủy link sau 24 giờ khiến ảnh bị mất! Bạn nên bấm <strong>"📸 Chọn ảnh mã QR từ máy"</strong> để hệ thống nén và lưu vĩnh viễn không bao giờ mất.
+                            </span>
+                          </div>
+                        )}
+
                         {/* QR Preview & Actions */}
                         {qrConfig.imageUrl && (
                           <div className="flex items-center gap-3 p-2.5 bg-rose-50/50 dark:bg-rose-950/20 rounded-xl border border-rose-100 dark:border-rose-900/30">
                             <div className="w-16 h-16 bg-white p-1 rounded-lg border border-pink-200 shadow-sm flex items-center justify-center shrink-0 overflow-hidden">
-                              <img
-                                src={qrConfig.imageUrl}
-                                alt="QR Preview"
-                                className="w-full h-full object-contain"
-                                referrerPolicy="no-referrer"
-                              />
+                              {qrImgError ? (
+                                <div className="text-[9px] text-red-500 font-bold text-center leading-tight">
+                                  Lỗi tải ảnh
+                                </div>
+                              ) : (
+                                <img
+                                  src={qrConfig.imageUrl}
+                                  alt="QR Preview"
+                                  onError={() => setQrImgError(true)}
+                                  className="w-full h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                              )}
                             </div>
                             <div className="flex-1 flex flex-col gap-0.5">
-                              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                                <Check size={12} /> Đã có ảnh mã QR
+                              {qrImgError ? (
+                                <span className="text-[11px] font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
+                                  <AlertTriangle size={12} /> Link ảnh lỗi hoặc hết hạn
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                  <Check size={12} /> Đã có ảnh mã QR {qrImgSizeKb ? `(~${qrImgSizeKb} KB)` : ""}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                                {qrImgError ? "Hãy chọn ảnh tải lên từ máy để lưu vĩnh viễn" : "Sẵn sàng lưu vào cơ sở dữ liệu"}
                               </span>
-                              <span className="text-[10px] text-gray-500 dark:text-gray-400">Xem trước mã QR</span>
                             </div>
                             <button
                               type="button"
-                              onClick={() => setQrConfig(prev => ({ ...prev, imageUrl: "" }))}
+                              onClick={() => {
+                                setQrConfig(prev => ({ ...prev, imageUrl: "" }));
+                                setQrImgError(false);
+                                setQrImgSizeKb(null);
+                              }}
                               className="px-2.5 py-1 text-[10px] text-red-500 hover:text-red-700 font-bold bg-white dark:bg-black/40 rounded-lg border border-red-200 dark:border-red-900/40 hover:bg-red-50 cursor-pointer"
                             >
                               Gỡ ảnh
@@ -4652,26 +4754,39 @@ export default function App() {
                 {qrConfig.imageUrl ? (
                   <div className="flex flex-col items-center gap-3 w-full">
                     <div className="relative group p-3 bg-white rounded-2xl border-2 border-pink-200 dark:border-pink-800/80 shadow-lg max-w-[260px] w-full aspect-square flex items-center justify-center overflow-hidden">
-                      <img
-                        src={qrConfig.imageUrl}
-                        alt="QR Code"
-                        className="w-full h-full object-contain select-none"
-                        referrerPolicy="no-referrer"
-                      />
+                      {qrImgError ? (
+                        <div className="flex flex-col items-center justify-center p-3 text-center gap-2">
+                          <AlertTriangle size={28} className="text-amber-500" />
+                          <span className="text-xs font-bold text-rose-700 dark:text-rose-400">Không thể tải ảnh</span>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
+                            Link ảnh này đã hết hạn hoặc bị lỗi. {isLoggedIn ? "Admin hãy vào Cài đặt chung tải ảnh từ máy lên để lưu vĩnh viễn!" : "Vui lòng thông báo admin cập nhật lại!"}
+                          </span>
+                        </div>
+                      ) : (
+                        <img
+                          src={qrConfig.imageUrl}
+                          alt="QR Code"
+                          onError={() => setQrImgError(true)}
+                          className="w-full h-full object-contain select-none"
+                          referrerPolicy="no-referrer"
+                        />
+                      )}
                     </div>
 
                     {/* Quick action buttons for QR image */}
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={qrConfig.imageUrl}
-                        download="vien-tam-than-co-thi-qr.png"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-black/40 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] font-bold border border-pink-200 dark:border-pink-900/50 shadow-sm flex items-center gap-1 transition-all cursor-pointer"
-                      >
-                        <Download size={13} /> Lưu ảnh QR
-                      </a>
-                    </div>
+                    {!qrImgError && (
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={qrConfig.imageUrl}
+                          download="vien-tam-than-co-thi-qr.png"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 rounded-xl bg-white dark:bg-black/40 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] font-bold border border-pink-200 dark:border-pink-900/50 shadow-sm flex items-center gap-1 transition-all cursor-pointer"
+                        >
+                          <Download size={13} /> Lưu ảnh QR
+                        </a>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="py-8 px-4 flex flex-col items-center justify-center text-center bg-white/60 dark:bg-black/20 rounded-2xl border border-dashed border-pink-200 dark:border-pink-900/40 w-full">
