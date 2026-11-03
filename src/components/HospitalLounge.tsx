@@ -570,21 +570,24 @@ export function HospitalLounge({ isLoggedIn, addToast, prompts = [] }: HospitalL
     <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto pb-16 font-nunito">
       
       {/* SẢNH KHOE BANNER / HERO (BACKGROUND IMAGE & SINGLE POST BUTTON ONLY) */}
-      <div className="relative w-full h-48 sm:h-64 md:h-72 rounded-3xl overflow-hidden shadow-xl border border-pink-200/50 dark:border-pink-900/40 flex items-center justify-center p-6 sm:p-8">
+      <div className="lounge-banner relative w-full h-48 sm:h-64 md:h-72 rounded-3xl overflow-hidden shadow-xl border-2 border-white/30 dark:border-white/20 flex items-center justify-center p-6 sm:p-8">
         <motion.div 
           layoutId="lounge-banner-bg" 
           className="absolute inset-0 w-full h-full"
           transition={{ type: "spring", stiffness: 220, damping: 26 }}
         >
           <img 
-            src="/banner_lounge.jpg" 
+            src="https://i.postimg.cc/7PT65BC8/banner.jpg" 
             alt="Sảnh Khoe Banner" 
-            className="w-full h-full object-cover brightness-[0.92] contrast-[1.02] filter blur-[0.6px]"
+            className="banner-bg-img w-full h-full object-cover filter blur-[2px] brightness-[0.8] scale-105"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = "/banner_lounge.jpg";
+            }}
           />
-          <div className="absolute inset-0 bg-black/15" />
+          <div className="absolute inset-0 bg-black/20 pointer-events-none" />
         </motion.div>
 
-        {/* SINGLE BUTTON: ĐĂNG BÀI */}
+        {/* SINGLE BUTTON: GỬI (TÂM SỰ) AT CENTER */}
         <div className="relative z-10 flex items-center justify-center">
           <button
             type="button"
@@ -592,7 +595,7 @@ export function HospitalLounge({ isLoggedIn, addToast, prompts = [] }: HospitalL
             className="px-8 py-3.5 sm:px-10 sm:py-4 rounded-2xl bg-white/95 text-[#A55166] hover:bg-white hover:text-rose-600 font-extrabold text-base sm:text-lg shadow-2xl backdrop-blur-md transition-all duration-300 hover:scale-105 active:scale-95 flex items-center gap-2.5 cursor-pointer border-2 border-white/80"
           >
             <Sparkles size={20} className="text-amber-500 animate-spin" style={{ animationDuration: "6s" }} />
-            <span>Đăng bài</span>
+            <span>Gửi</span>
           </button>
         </div>
       </div>
@@ -612,9 +615,12 @@ export function HospitalLounge({ isLoggedIn, addToast, prompts = [] }: HospitalL
             >
               {/* Background image expanded into modal backdrop */}
               <img 
-                src="/banner_lounge.jpg" 
+                src="https://i.postimg.cc/7PT65BC8/banner.jpg" 
                 alt="Modal Background" 
                 className="absolute inset-0 w-full h-full object-cover brightness-[0.40] blur-[2px] scale-105 pointer-events-none" 
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = "/banner_lounge.jpg";
+                }}
               />
               <div className="absolute inset-0 bg-black/45 backdrop-blur-xs pointer-events-none" />
 
@@ -896,10 +902,10 @@ export function HospitalLounge({ isLoggedIn, addToast, prompts = [] }: HospitalL
             return (
               <div
                 key={post.id}
-                className={`relative bg-white/85 dark:bg-[#1A1215]/85 backdrop-blur-md rounded-3xl p-5 sm:p-6 border transition-all duration-300 shadow-md ${
+                className={`lounge-post-card relative bg-white/85 dark:bg-[#1A1215]/85 backdrop-blur-md rounded-3xl p-5 sm:p-6 border transition-all duration-300 shadow-md ${
                   post.isPinned 
                     ? "border-2 border-amber-400/80 dark:border-amber-500/60 bg-gradient-to-br from-amber-50/30 via-white/85 to-pink-50/20 dark:from-amber-950/20 dark:via-[#1A1215]/85 dark:to-rose-950/20" 
-                    : "border-pink-100 dark:border-pink-900/40 hover:border-pink-300 dark:hover:border-pink-800"
+                    : "border-pink-100 dark:border-pink-900/40"
                 }`}
               >
                 {/* Pinned Header indicator */}
