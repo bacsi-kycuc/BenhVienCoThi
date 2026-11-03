@@ -25,6 +25,26 @@ service cloud.firestore {
     match /feedbacks/{feedbackId} {
       allow read, write: if true;
     }
+
+    match /admin_notifications/{notificationId} {
+      allow read, write: if true;
+    }
+
+    match /weekly_votes/{weekId} {
+      allow read, write: if true;
+    }
+
+    match /lounge_posts/{postId} {
+      allow read, write: if true;
+    }
+
+    match /lounge_comments/{commentId} {
+      allow read, write: if true;
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if true;
+    }
   }
 }
 

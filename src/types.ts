@@ -64,6 +64,53 @@ export interface Feedback {
   isReported?: boolean;
   reportedReason?: string;
   reportedAt?: string;
+  adminReply?: string;
+  adminReplyAt?: string;
+  adminReplyAuthor?: string;
+}
+
+export interface AdminNotification {
+  id: string;
+  type: "feedback" | "report" | "system";
+  title: string;
+  message: string;
+  promptId?: number | string;
+  promptName?: string;
+  author?: string;
+  rating?: number;
+  timestamp: string;
+  read: boolean;
+}
+
+export interface WeeklyVotesDoc {
+  weekKey: string; // e.g. "2026-W45"
+  votes: Record<string, number>; // characterId -> vote count
+  winnerId?: string;
+  winnerName?: string;
+  winnerVotes?: number;
+  updatedAt?: string;
+}
+
+export interface LoungePost {
+  id: string;
+  author: string;
+  content: string; // Up to 1000 words
+  nurseName?: string; // Target nurse/doctor mentioned in post
+  tag?: string;
+  images?: string[]; // Up to 4 compressed images
+  reactions?: Record<string, number>;
+  commentsCount?: number;
+  isPinned?: boolean;
+  createdAt: string;
+}
+
+export interface LoungeComment {
+  id: string;
+  postId: string;
+  author: string;
+  content: string;
+  isAdmin?: boolean;
+  createdAt: string;
 }
 
 export interface QrConfig {
@@ -73,4 +120,5 @@ export interface QrConfig {
   note: string;
   updatedAt?: string;
 }
+
 

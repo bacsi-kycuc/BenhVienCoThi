@@ -6,8 +6,15 @@ import {
   MedicalRecord,
   Sticker,
   Feedback,
-  QrConfig
+  QrConfig,
+  AdminNotification,
+  WeeklyVotesDoc,
+  LoungePost,
+  LoungeComment
 } from "./types";
+import { getCurrentWeekDetails } from "./utils/dateWeek";
+import { AdminNotificationModal } from "./components/AdminNotificationModal";
+import { HospitalLounge } from "./components/HospitalLounge";
 import { 
   DEFAULT_CATEGORIES, 
   PHD_SAMPLES,
@@ -58,7 +65,12 @@ import {
   QrCode,
   Download,
   Copy,
-  Check
+  Check,
+  Bell,
+  Award,
+  MessageSquare,
+  ShieldCheck,
+  CornerDownRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { PastelStickerComponents } from "./components/PastelStickers";
@@ -669,6 +681,24 @@ export default function App() {
   const [feedbackNickname, setFeedbackNickname] = useState<string>("");
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState<boolean>(false);
 
+  // Hospital Navigation Area: "wards" (Khoa phòng) or "lounge" (Sảnh Khoe)
+  const [hospitalArea, setHospitalArea] = useState<"wards" | "lounge">("wards");
+
+  // Weekly Voting States
+  const currentWeek = getCurrentWeekDetails();
+  const [weeklyVotes, setWeeklyVotes] = useState<Record<string, number>>({});
+  const [prevWeekVotes, setPrevWeekVotes] = useState<Record<string, number>>({});
+  const [honorBannerTab, setHonorBannerTab] = useState<"current" | "previous">("current");
+
+  // Admin Notification States
+  const [adminNotifications, setAdminNotifications] = useState<AdminNotification[]>([]);
+  const [showAdminNotificationModal, setShowAdminNotificationModal] = useState<boolean>(false);
+
+  // Admin Feedback Reply States
+  const [adminReplyTexts, setAdminReplyTexts] = useState<Record<string, string>>({});
+  const [replyingFeedbackId, setReplyingFeedbackId] = useState<string | null>(null);
+  const [isSavingAdminReply, setIsSavingAdminReply] = useState<boolean>(false);
+
   const getPromptAvgRating = (pId: number): number => {
     const promptFeedbacks = feedbacks.filter(f => String(f.promptId) === String(pId));
     if (promptFeedbacks.length === 0) return 0;
@@ -1032,6 +1062,55 @@ export default function App() {
       console.warn("Failed to listen to QR config:", err);
     });
 
+    // 7. Subscribe to Current Week Votes
+    const unsubWeeklyVotes = onSnapshot(doc(db, "weekly_votes", currentWeek.weekKey), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setWeeklyVotes(data.votes || {});
+      } else {
+        setWeeklyVotes({});
+      }
+    }, (err) => {
+      console.warn("Failed to listen to current weekly votes:", err);
+    });
+
+    // 8. Subscribe to Previous Week Votes
+    const unsubPrevWeekVotes = onSnapshot(doc(db, "weekly_votes", currentWeek.prevWeekKey), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setPrevWeekVotes(data.votes || {});
+      } else {
+        setPrevWeekVotes({});
+      }
+    }, (err) => {
+      console.warn("Failed to listen to previous weekly votes:", err);
+    });
+
+    // 9. Subscribe to Admin Notifications
+    let isInitialNotifLoad = true;
+    const unsubNotifications = onSnapshot(collection(db, "admin_notifications"), (snapshot) => {
+      const list: AdminNotification[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ ...docSnap.data(), id: docSnap.id } as AdminNotification);
+      });
+      list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      if (!isInitialNotifLoad) {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const newNotif = change.doc.data() as AdminNotification;
+            if (newNotif && !newNotif.read) {
+              addToast(`🔔 [Thông báo mới] ${newNotif.title}`, "success");
+            }
+          }
+        });
+      }
+      isInitialNotifLoad = false;
+      setAdminNotifications(list);
+    }, (err) => {
+      console.warn("Failed to listen to admin notifications:", err);
+    });
+
     return () => {
       unsubCats();
       unsubPrompts();
@@ -1039,8 +1118,11 @@ export default function App() {
       unsubMaintenance();
       unsubFeedbacks();
       unsubQr();
+      unsubWeeklyVotes();
+      unsubPrevWeekVotes();
+      unsubNotifications();
     };
-  }, []);
+  }, [currentWeek.weekKey, currentWeek.prevWeekKey]);
 
   // Clean up any unassigned/unknown category medical records from Firestore permanently
   useEffect(() => {
@@ -1315,6 +1397,20 @@ export default function App() {
         .catch(err => handleFirestoreError(err, OperationType.WRITE, `prompts/${characterId}`));
     }
 
+    // Update Weekly Votes Tally in Firestore for the current week (Monday-Sunday)
+    const updatedWeeklyVotes = {
+      ...weeklyVotes,
+      [characterId]: (weeklyVotes[characterId] || 0) + 1
+    };
+    setWeeklyVotes(updatedWeeklyVotes);
+    setDoc(doc(db, "weekly_votes", currentWeek.weekKey), {
+      weekKey: currentWeek.weekKey,
+      votes: updatedWeeklyVotes,
+      updatedAt: new Date().toISOString()
+    }, { merge: true }).catch(err => {
+      console.warn("Could not save weekly vote:", err);
+    });
+
     // 1. Update votesData State and localStorage
     setVotesData(prev => {
       const updated = {
@@ -1336,7 +1432,7 @@ export default function App() {
     });
 
     // 3. Inform user of success & trigger immediate celebrate-confetti event
-    addToast(`🎉 Đã bình chọn thành công cho "${charName}"!`, "success");
+    addToast(`🎉 Đã bình chọn tuần này cho "${charName}"! 💖`, "success");
     window.dispatchEvent(new CustomEvent("celebrate-confetti"));
 
     // Spawn lovely floating romantic hearts
@@ -1400,6 +1496,22 @@ export default function App() {
         await setDoc(doc(db, "feedbacks", feedbackId), newFeedback);
         addToast("Gửi nhận xét thành công! Cảm ơn bé đã chia sẻ nhé 🌸", "success");
         
+        // Create an alert in admin_notifications so Admin is notified promptly
+        const notifId = "notif_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
+        const adminAlert: AdminNotification = {
+          id: notifId,
+          type: "feedback",
+          title: `Nhận xét mới (${feedbackRating}⭐) cho ${selectedFeedbackPrompt.name}`,
+          message: `${authorName}: "${feedbackComment.trim().slice(0, 90)}${feedbackComment.trim().length > 90 ? "..." : ""}"`,
+          promptId: selectedFeedbackPrompt.id,
+          promptName: selectedFeedbackPrompt.name,
+          author: authorName,
+          rating: feedbackRating,
+          timestamp: new Date().toISOString(),
+          read: false
+        };
+        setDoc(doc(db, "admin_notifications", notifId), adminAlert).catch(e => console.warn("Admin notification creation error:", e));
+
         // Trigger lovely firework explosion Confetti effect
         setPhdConfettiActive(true);
         
@@ -1427,6 +1539,20 @@ export default function App() {
     try {
       await setDoc(doc(db, "feedbacks", fb.id), updatedFeedback);
       addToast("Đã báo cáo kiểm duyệt phản hồi này đến Admin!", "success");
+
+      // Notify Admin in notification center
+      const notifId = "notif_rep_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
+      const reportAlert: AdminNotification = {
+        id: notifId,
+        type: "report",
+        title: "Báo cáo kiểm duyệt nhận xét",
+        message: `Phản hồi của "${fb.author}" bị người dùng báo cáo cần kiểm duyệt!`,
+        promptId: fb.promptId,
+        author: fb.author,
+        timestamp: new Date().toISOString(),
+        read: false
+      };
+      setDoc(doc(db, "admin_notifications", notifId), reportAlert).catch(e => console.warn("Admin report notification error:", e));
     } catch (err) {
       setFeedbacks(prev => prev.map(f => f.id === fb.id ? fb : f));
       handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fb.id}`);
@@ -1459,6 +1585,80 @@ export default function App() {
     } catch (err) {
       setFeedbacks(backupFeedbacks);
       handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fbId}`);
+    }
+  };
+
+  // Admin reply to feedback handler
+  const handleSaveAdminReply = async (fb: Feedback) => {
+    const replyText = (adminReplyTexts[fb.id] ?? fb.adminReply ?? "").trim();
+    if (!replyText) {
+      addToast("Vui lòng nhập nội dung câu trả lời!", "warning");
+      return;
+    }
+    setIsSavingAdminReply(true);
+    const updatedFb: Feedback = {
+      ...fb,
+      adminReply: replyText,
+      adminReplyAt: new Date().toISOString(),
+      adminReplyAuthor: "Ban Giám Đốc Viện"
+    };
+    setFeedbacks(prev => prev.map(item => item.id === fb.id ? updatedFb : item));
+    try {
+      await setDoc(doc(db, "feedbacks", fb.id), updatedFb);
+      addToast("Đã lưu phản hồi của Ban Quản Trị thành công! 🩺💬", "success");
+      setReplyingFeedbackId(null);
+    } catch (err) {
+      setFeedbacks(prev => prev.map(item => item.id === fb.id ? fb : item));
+      handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fb.id}`);
+      addToast("Lỗi khi lưu phản hồi!", "warning");
+    } finally {
+      setIsSavingAdminReply(false);
+    }
+  };
+
+  const handleDeleteAdminReply = async (fb: Feedback) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa phản hồi của Ban Quản Trị?")) return;
+    const updatedFb: Feedback = { ...fb };
+    delete updatedFb.adminReply;
+    delete updatedFb.adminReplyAt;
+    delete updatedFb.adminReplyAuthor;
+    setFeedbacks(prev => prev.map(item => item.id === fb.id ? updatedFb : item));
+    try {
+      await setDoc(doc(db, "feedbacks", fb.id), updatedFb);
+      addToast("Đã xóa phản hồi của Ban Quản Trị!", "success");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fb.id}`);
+    }
+  };
+
+  // Admin Notifications management
+  const handleMarkNotificationAsRead = async (id: string) => {
+    setAdminNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    try {
+      await setDoc(doc(db, "admin_notifications", id), { read: true }, { merge: true });
+    } catch (err) {
+      console.warn("Could not mark notification as read:", err);
+    }
+  };
+
+  const handleMarkAllNotificationsAsRead = async () => {
+    setAdminNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    try {
+      for (const notif of adminNotifications.filter(n => !n.read)) {
+        await setDoc(doc(db, "admin_notifications", notif.id), { read: true }, { merge: true });
+      }
+      addToast("Đã đánh dấu đọc tất cả thông báo!", "success");
+    } catch (err) {
+      console.warn("Error marking all as read:", err);
+    }
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    setAdminNotifications(prev => prev.filter(n => n.id !== id));
+    try {
+      await deleteDoc(doc(db, "admin_notifications", id));
+    } catch (err) {
+      console.warn("Could not delete notification:", err);
     }
   };
 
@@ -2348,22 +2548,56 @@ export default function App() {
     return matchesSearch && matchesGenre && matchesSelectedTag;
   });
 
-  // Compute leading character for Honor Banner (character with maximum votes)
-  const leadingCharacter = (() => {
+  // Compute leading character for Current Week (Monday to Sunday)
+  const leadingCharacterThisWeek = (() => {
     if (prompts.length === 0) return null;
     let bestPrompt: Prompt | null = null;
-    let maxVotes = 0; // Initialize at 0, so only prompts with at least 1 real vote can lead
+    let maxWeekly = 0;
     
     prompts.forEach(p => {
-      const votes = p.votes ?? 0;
-      if (votes > maxVotes) {
-        maxVotes = votes;
+      const wVotes = weeklyVotes[String(p.id)] ?? 0;
+      if (wVotes > maxWeekly) {
+        maxWeekly = wVotes;
         bestPrompt = p;
       }
     });
     
+    // If no votes have been cast yet this week, fallback to overall leading prompt
+    if (!bestPrompt) {
+      let maxTotal = -1;
+      prompts.forEach(p => {
+        const total = p.votes ?? 0;
+        if (total > maxTotal) {
+          maxTotal = total;
+          bestPrompt = p;
+        }
+      });
+    }
     return bestPrompt;
   })();
+
+  // Compute winner from Previous Week
+  const prevWeekWinner = (() => {
+    if (prompts.length === 0) return null;
+    let bestPrompt: Prompt | null = null;
+    let maxPrev = 0;
+    
+    prompts.forEach(p => {
+      const prevVotesCount = prevWeekVotes[String(p.id)] ?? 0;
+      if (prevVotesCount > maxPrev) {
+        maxPrev = prevVotesCount;
+        bestPrompt = p;
+      }
+    });
+
+    if (bestPrompt && maxPrev > 0) {
+      return { prompt: bestPrompt, votes: maxPrev };
+    }
+    return null;
+  })();
+
+  // Backward compatible alias
+  const leadingCharacter = leadingCharacterThisWeek;
 
   const getBannerRoleTitle = (character: Prompt | null) => {
     if (!character) return "🩺 TOP GƯƠNG MẶT ĐƯỢC YÊU THÍCH NHẤT";
@@ -2736,6 +2970,21 @@ export default function App() {
             <div className="relative z-10 flex flex-wrap items-center gap-3 w-full md:w-auto">
               {isLoggedIn && (
                 <>
+                  {/* Admin Notification Center Bell */}
+                  <button 
+                    onClick={() => setShowAdminNotificationModal(true)}
+                    className="relative flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xs shadow-md border border-white/30 transition-all cursor-pointer hover:scale-[1.02]"
+                    title="Trung tâm thông báo Admin"
+                  >
+                    <Bell size={15} />
+                    <span className="hidden sm:inline">Thông báo</span>
+                    {adminNotifications.filter(n => !n.read).length > 0 && (
+                      <span className="min-w-[18px] h-[18px] px-1 bg-red-500 text-white rounded-full text-[10px] font-black flex items-center justify-center animate-bounce shadow">
+                        {adminNotifications.filter(n => !n.read).length}
+                      </span>
+                    )}
+                  </button>
+
                   {feedbacks.filter(f => f.isReported).length > 0 && (
                     <button 
                       onClick={() => setShowReportsModal(true)}
@@ -2790,88 +3039,281 @@ export default function App() {
             </div>
           </header>
 
-          {/* HONOR BENTO BANNER - TOP RECOGNIZED CHARACTER */}
-          {leadingCharacter && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4 }}
-              className="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-r from-[#9E182B] via-[#630D1B] to-[#200407] border-2 border-[#F2AFBC]/45 shadow-[0_20px_45px_0_rgba(158,24,43,0.18)] mb-8 flex flex-col md:flex-row items-center justify-between gap-6 paper-noise hover:scale-[1.015] transition-all duration-300"
-            >
-              {/* Background ambient lighting effects inside banner */}
-              <div className="absolute top-0 right-0 w-64 h-64 bg-[#F2AFBC]/10 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute -bottom-10 left-10 w-48 h-48 bg-[#9E182B]/15 rounded-full blur-2xl pointer-events-none" />
-              
-              <div className="relative z-10 flex flex-col md:flex-row items-center gap-5 text-center md:text-left">
-                {/* Highlighted dynamic icon/profile ring */}
-                <motion.div 
-                  className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-tr from-[#FEDB41] via-[#F2AFBC] to-[#9E182B] p-1 rounded-full shadow-lg flex items-center justify-center relative"
-                  animate={{ rotate: [0, 4, -4, 0] }}
-                  transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
-                >
-                  <div className="w-full h-full bg-[#200407] rounded-full flex items-center justify-center text-3xl sm:text-4xl select-none">
-                    {leadingCharacter.icon || "🩺"}
+          {/* HOSPITAL SECTIONS / NAVIGATION TABS */}
+          <div className="flex items-center justify-center gap-2 sm:gap-3 mb-6 select-none">
+            <div className="bg-white/80 dark:bg-[#1E2533]/80 backdrop-blur-md p-1.5 rounded-2xl border-2 border-pink-200 dark:border-pink-900/40 shadow-lg flex items-center gap-1 relative">
+              <button
+                type="button"
+                onClick={() => setHospitalArea("wards")}
+                className={`relative px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-colors flex items-center gap-2 cursor-pointer z-10 ${
+                  hospitalArea === "wards"
+                    ? "text-white"
+                    : "text-gray-600 dark:text-gray-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-pink-50/50 dark:hover:bg-rose-950/20"
+                }`}
+              >
+                {hospitalArea === "wards" && (
+                  <motion.div
+                    layoutId="activeHospitalTab"
+                    className="absolute inset-0 bg-gradient-to-r from-[#A55166] to-[#D38C9D] rounded-xl shadow-md shadow-pink-900/20 -z-10"
+                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                  />
+                )}
+                <span>🩺</span>
+                <span>Sảnh Chính</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHospitalArea("lounge")}
+                className={`relative px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-colors flex items-center gap-2 cursor-pointer z-10 ${
+                  hospitalArea === "lounge"
+                    ? "text-white"
+                    : "text-gray-600 dark:text-gray-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-pink-50/50 dark:hover:bg-rose-950/20"
+                }`}
+              >
+                {hospitalArea === "lounge" && (
+                  <motion.div
+                    layoutId="activeHospitalTab"
+                    className="absolute inset-0 bg-gradient-to-r from-[#A55166] to-[#D38C9D] rounded-xl shadow-md shadow-pink-900/20 -z-10"
+                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                  />
+                )}
+                <span>☕</span>
+                <span>Sảnh Khoe</span>
+              </button>
+            </div>
+          </div>
+
+          <AnimatePresence mode="wait">
+            {hospitalArea === "lounge" ? (
+              <motion.div
+                key="lounge-view"
+                initial={{ opacity: 0, y: 16, scale: 0.985, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -16, scale: 0.985, filter: "blur(4px)" }}
+                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <HospitalLounge isLoggedIn={isLoggedIn} addToast={addToast} prompts={prompts} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="wards-view"
+                initial={{ opacity: 0, y: 16, scale: 0.985, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -16, scale: 0.985, filter: "blur(4px)" }}
+                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              >
+              {/* HONOR BENTO BANNER - WEEKLY RECOGNITION */}
+              <div className="flex flex-col gap-2 mb-8">
+                {/* Banner Mode Switcher & Countdown Row */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-1">
+                  <div className="flex items-center gap-1.5 bg-white/70 dark:bg-[#1E2533]/70 backdrop-blur-md p-1 rounded-2xl border border-pink-200 dark:border-pink-900/40 shadow-xs">
+                    <button
+                      type="button"
+                      onClick={() => setHonorBannerTab("current")}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                        honorBannerTab === "current"
+                          ? "bg-[#9E182B] text-white shadow-sm"
+                          : "text-rose-900 dark:text-rose-200 hover:bg-rose-100/50 dark:hover:bg-rose-900/30"
+                      }`}
+                    >
+                      <span>🔥 Bình Chọn Tuần Này</span>
+                      <span className="text-[10px] opacity-80 font-mono">({currentWeek.startDateStr} - {currentWeek.endDateStr})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHonorBannerTab("previous")}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                        honorBannerTab === "previous"
+                          ? "bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow-sm"
+                          : "text-rose-900 dark:text-rose-200 hover:bg-rose-100/50 dark:hover:bg-rose-900/30"
+                      }`}
+                    >
+                      <Award size={13} className="text-amber-300" />
+                      <span>🏆 Quán Quân Tuần Trước</span>
+                    </button>
                   </div>
-                  {/* Gold Crown */}
-                  <span className="absolute -top-3.5 -right-1 text-2xl filter drop-shadow">👑</span>
-                </motion.div>
 
-                <div className="flex flex-col gap-1">
-                  <span className="inline-block text-[11px] sm:text-xs font-black text-[#FEDB41] tracking-widest uppercase bg-[#FEDB41]/10 px-3 py-1 rounded-full border border-[#FEDB41]/20 w-fit mx-auto md:mx-0 select-none shadow-sm">
-                    {getBannerRoleTitle(leadingCharacter)}
-                  </span>
-                  
-                  <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight drop-shadow-sm mt-1">
-                    {leadingCharacter.name}
-                  </h2>
-                  
-                  <p className="text-xs sm:text-sm text-[#F2E0D2] font-semibold tracking-wide flex items-center gap-1 opacity-90 justify-center md:justify-start">
-                    <span>{categories.find(c => c.id === leadingCharacter.category)?.name || "Khoa Trị Liệu"}</span>
-                    <span className="opacity-40">|</span>
-                    <span>Tích lũy</span>
-                    <span className="text-[#F9CBD6] font-extrabold font-mono text-sm sm:text-base underline decoration-dotted decoration-[#F2AFBC]">
-                      {(votesData[String(leadingCharacter.id)] ?? leadingCharacter.votes ?? 0)}
-                    </span>
-                    <span>phiếu yêu thích</span>
-                  </p>
+                  {/* Countdown indicator */}
+                  <div className="text-xs font-bold text-rose-800 dark:text-rose-300 bg-pink-100/60 dark:bg-rose-950/60 px-3 py-1.5 rounded-xl border border-pink-200 dark:border-pink-900/40 flex items-center gap-1.5">
+                    <Clock size={13} className="text-rose-600 dark:text-rose-400" />
+                    <span>Tổng kết lúc 23:59 Chủ Nhật (Còn {currentWeek.daysRemaining} ngày)</span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Right Interactive CTA side */}
-              <div className="relative z-10 flex flex-col items-center md:items-end gap-2.5 min-w-[200px]">
-                <span className="text-xs text-[#F2AFBC] font-bold tracking-wide text-center md:text-right select-none opacity-95">
-                  {getBannerCtaLabel(leadingCharacter)}
-                </span>
-                
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.05, y: -2 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => handleVote(String(leadingCharacter.id))}
-                  className="px-5 py-3 rounded-2xl bg-gradient-to-r from-[#9E182B] to-[#7A0D1D] border-2 border-[#F2AFBC] text-[#F2E0D2] text-xs font-black hover:border-[#F9CBD6] hover:shadow-lg hover:shadow-[#F2AFBC]/20 transition-all duration-300 cursor-pointer flex items-center gap-2"
-                >
-                  <span>💼</span> Bấm vào để VOTE cho {leadingCharacter.name.includes(" ") ? leadingCharacter.name.split(" ").slice(-2).join(" ") : leadingCharacter.name}
-                </motion.button>
-              </div>
+                {/* Banner Content Card */}
+                {honorBannerTab === "current" ? (
+                  leadingCharacterThisWeek && (
+                    <motion.div
+                      key="banner-current"
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                      className="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-r from-[#9E182B] via-[#630D1B] to-[#200407] border-2 border-[#F2AFBC]/45 shadow-[0_20px_45px_0_rgba(158,24,43,0.18)] flex flex-col md:flex-row items-center justify-between gap-6 paper-noise hover:scale-[1.01] transition-all duration-300"
+                    >
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-[#F2AFBC]/10 rounded-full blur-3xl pointer-events-none" />
+                      <div className="absolute -bottom-10 left-10 w-48 h-48 bg-[#9E182B]/15 rounded-full blur-2xl pointer-events-none" />
+                      
+                      <div className="relative z-10 flex flex-col md:flex-row items-center gap-5 text-center md:text-left">
+                        <motion.div 
+                          className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-tr from-[#FEDB41] via-[#F2AFBC] to-[#9E182B] p-1 rounded-full shadow-lg flex items-center justify-center relative shrink-0"
+                          animate={{ rotate: [0, 4, -4, 0] }}
+                          transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
+                        >
+                          <div className="w-full h-full bg-[#200407] rounded-full flex items-center justify-center text-3xl sm:text-4xl select-none">
+                            {leadingCharacterThisWeek.icon || "🩺"}
+                          </div>
+                          <span className="absolute -top-3.5 -right-1 text-2xl filter drop-shadow">👑</span>
+                        </motion.div>
 
-              {/* Romantic animated hearts renderer within the banner element */}
-              <AnimatePresence>
-                {floatingHearts.map(heart => (
-                  <motion.span
-                    key={heart.id}
-                    initial={{ y: 50, x: `${heart.x}%`, opacity: 1, scale: 0.8 }}
-                    animate={{ y: -190, opacity: 0, scale: 1.6, rotate: [0, 15, -15, 0] }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 1.6, ease: "easeOut" }}
-                    className="absolute text-xl pointer-events-none select-none z-30 opacity-95"
-                    style={{ bottom: "10px" }}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5">
+                            <span className="inline-block text-[11px] sm:text-xs font-black text-[#FEDB41] tracking-widest uppercase bg-[#FEDB41]/10 px-3 py-1 rounded-full border border-[#FEDB41]/20 select-none shadow-sm">
+                              {getBannerRoleTitle(leadingCharacterThisWeek)}
+                            </span>
+                            <span className="text-[10px] font-bold text-pink-200 bg-white/10 px-2 py-0.5 rounded-full">
+                              Đang dẫn đầu Tuần {currentWeek.weekNumber}
+                            </span>
+                          </div>
+                          
+                          <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight drop-shadow-sm mt-1">
+                            {leadingCharacterThisWeek.name}
+                          </h2>
+                          
+                          <p className="text-xs sm:text-sm text-[#F2E0D2] font-semibold tracking-wide flex flex-wrap items-center gap-1.5 opacity-90 justify-center md:justify-start">
+                            <span>{categories.find(c => c.id === leadingCharacterThisWeek.category)?.name || "Khoa Trị Liệu"}</span>
+                            <span className="opacity-40">|</span>
+                            <span>Tuần này tích lũy:</span>
+                            <span className="text-[#FEDB41] font-black font-mono text-base underline decoration-dotted decoration-[#FEDB41]">
+                              {(weeklyVotes[String(leadingCharacterThisWeek.id)] ?? 0)}
+                            </span>
+                            <span>phiếu</span>
+                            <span className="text-[11px] opacity-75 font-normal">
+                              (Toàn thời gian: {(votesData[String(leadingCharacterThisWeek.id)] ?? leadingCharacterThisWeek.votes ?? 0)} phiếu)
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="relative z-10 flex flex-col items-center md:items-end gap-2.5 min-w-[200px]">
+                        <span className="text-xs text-[#F2AFBC] font-bold tracking-wide text-center md:text-right select-none opacity-95">
+                          {getBannerCtaLabel(leadingCharacterThisWeek)}
+                        </span>
+                        
+                        <motion.button
+                          type="button"
+                          whileHover={{ scale: 1.05, y: -2 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleVote(String(leadingCharacterThisWeek.id))}
+                          className="px-5 py-3 rounded-2xl bg-gradient-to-r from-[#9E182B] to-[#7A0D1D] border-2 border-[#F2AFBC] text-[#F2E0D2] text-xs font-black hover:border-[#F9CBD6] hover:shadow-lg hover:shadow-[#F2AFBC]/20 transition-all duration-300 cursor-pointer flex items-center gap-2"
+                        >
+                          <span>💼</span> Bấm vào để VOTE tuần này cho {leadingCharacterThisWeek.name.includes(" ") ? leadingCharacterThisWeek.name.split(" ").slice(-2).join(" ") : leadingCharacterThisWeek.name}
+                        </motion.button>
+                      </div>
+
+                      <AnimatePresence>
+                        {floatingHearts.map(heart => (
+                          <motion.span
+                            key={heart.id}
+                            initial={{ y: 50, x: `${heart.x}%`, opacity: 1, scale: 0.8 }}
+                            animate={{ y: -190, opacity: 0, scale: 1.6, rotate: [0, 15, -15, 0] }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 1.6, ease: "easeOut" }}
+                            className="absolute text-xl pointer-events-none select-none z-30 opacity-95"
+                            style={{ bottom: "10px" }}
+                          >
+                            {heart.label}
+                          </motion.span>
+                        ))}
+                      </AnimatePresence>
+                    </motion.div>
+                  )
+                ) : (
+                  /* TAB: PREVIOUS WEEK WINNER */
+                  <motion.div
+                    key="banner-prev"
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.3 }}
+                    className="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-r from-[#704214] via-[#4A2608] to-[#1F1005] border-2 border-amber-300/50 shadow-[0_20px_45px_0_rgba(245,158,11,0.18)] flex flex-col md:flex-row items-center justify-between gap-6 paper-noise"
                   >
-                    {heart.label}
-                  </motion.span>
-                ))}
-              </AnimatePresence>
-            </motion.div>
-          )}
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
+                    <div className="absolute -bottom-10 left-10 w-48 h-48 bg-amber-600/15 rounded-full blur-2xl pointer-events-none" />
+
+                    {prevWeekWinner ? (
+                      <>
+                        <div className="relative z-10 flex flex-col md:flex-row items-center gap-5 text-center md:text-left">
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-tr from-amber-300 via-amber-500 to-yellow-600 p-1 rounded-full shadow-xl flex items-center justify-center relative shrink-0">
+                            <div className="w-full h-full bg-[#200407] rounded-full flex items-center justify-center text-3xl sm:text-4xl select-none">
+                              {prevWeekWinner.prompt.icon || "🏆"}
+                            </div>
+                            <span className="absolute -top-3.5 -right-1 text-2xl filter drop-shadow">👑</span>
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-center md:justify-start gap-2">
+                              <span className="inline-block text-[11px] sm:text-xs font-black text-amber-300 tracking-widest uppercase bg-amber-400/15 px-3 py-1 rounded-full border border-amber-400/30 select-none shadow-sm flex items-center gap-1">
+                                <Award size={13} /> QUÁN QUÂN TUẦN {currentWeek.prevWeekNumber}
+                              </span>
+                            </div>
+
+                            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight drop-shadow-sm mt-1">
+                              {prevWeekWinner.prompt.name}
+                            </h2>
+
+                            <p className="text-xs sm:text-sm text-amber-100 font-semibold tracking-wide flex items-center gap-1.5 opacity-90 justify-center md:justify-start">
+                              <span>{categories.find(c => c.id === prevWeekWinner.prompt.category)?.name || "Khoa Trị Liệu"}</span>
+                              <span className="opacity-40">|</span>
+                              <span>Xuất sắc đạt</span>
+                              <span className="text-amber-300 font-black font-mono text-base underline decoration-dotted decoration-amber-300">
+                                {prevWeekWinner.votes}
+                              </span>
+                              <span>phiếu yêu thích tuần qua! 🌟</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="relative z-10 flex flex-col items-center md:items-end gap-2">
+                          <span className="px-4 py-2 rounded-2xl bg-amber-400/20 border border-amber-300/40 text-amber-200 text-xs font-bold text-center">
+                            🏅 Vinh danh trên Bảng Vàng Bệnh Viện
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setHonorBannerTab("current")}
+                            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all cursor-pointer"
+                          >
+                            👈 Chuyển sang bình chọn tuần này
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-4 py-2 text-center sm:text-left">
+                        <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 rounded-full bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-3xl">
+                            🏆
+                          </div>
+                          <div>
+                            <h3 className="text-base sm:text-lg font-bold text-white">
+                              Đang trong tuần thi đua tính điểm đầu tiên!
+                            </h3>
+                            <p className="text-xs text-amber-200/80 mt-0.5">
+                              Kết thúc 23:59 Chủ Nhật tuần này, gương mặt nhận nhiều tim nhất sẽ chính thức được vinh danh Quán Quân tại đây 🌸
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setHonorBannerTab("current")}
+                          className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md transition-all shrink-0 cursor-pointer"
+                        >
+                          👉 Xem Bảng Tuần Này
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </div>
 
           {/* SƠ ĐỒ PHÒNG BỆNH (Nằm ngang toàn màn hình ngay dưới banner web) */}
           <div className="bg-white/75 dark:bg-[#1E2533]/85 backdrop-blur-md rounded-2xl p-5 border-2 border-pink-100 dark:border-pink-950/40 shadow-lg flex flex-col gap-4 mb-8 select-none">
@@ -3297,6 +3739,9 @@ export default function App() {
 
             </main>
           </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
 
         </div>
       )}
@@ -4573,7 +5018,87 @@ export default function App() {
                                 {f.comment}
                               </p>
 
+                              {/* Official Admin Reply display */}
+                              {f.adminReply && (
+                                <div className="mt-1.5 p-3 rounded-2xl bg-gradient-to-r from-pink-100/60 via-rose-100/40 to-amber-50/50 dark:from-[#2A1620] dark:to-[#1C0E15] border-l-3 border-[#A55166] dark:border-[#F2AFBC] flex flex-col gap-1 text-[11px] shadow-xs">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-black text-[#A55166] dark:text-[#F2AFBC] flex items-center gap-1.5">
+                                      <ShieldCheck size={13} className="text-[#A55166] dark:text-[#F2AFBC]" />
+                                      <span>{f.adminReplyAuthor || "Ban Quản Trị Viện"}</span>
+                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                      {f.adminReplyAt && (
+                                        <span className="text-[9px] text-gray-400">
+                                          {formatDate(new Date(f.adminReplyAt))}
+                                        </span>
+                                      )}
+                                      {isLoggedIn && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteAdminReply(f)}
+                                          className="text-gray-400 hover:text-red-500 p-0.5"
+                                          title="Xóa phản hồi này"
+                                        >
+                                          <X size={11} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <p className="text-gray-800 dark:text-gray-200 italic leading-relaxed font-medium">
+                                    "{f.adminReply}"
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Admin Inline Reply Box */}
+                              {isLoggedIn && replyingFeedbackId === f.id && (
+                                <div className="mt-2 p-3 rounded-2xl bg-pink-100/70 dark:bg-black/40 border border-pink-300 dark:border-pink-800 flex flex-col gap-2">
+                                  <span className="text-[11px] font-bold text-[#A55166] dark:text-[#F2AFBC] flex items-center gap-1">
+                                    <CornerDownRight size={13} /> Phản hồi chính thức của Ban Quản Trị:
+                                  </span>
+                                  <textarea
+                                    rows={2}
+                                    value={adminReplyTexts[f.id] ?? f.adminReply ?? ""}
+                                    onChange={(e) => setAdminReplyTexts(prev => ({ ...prev, [f.id]: e.target.value }))}
+                                    placeholder="Gửi lời cảm ơn, giải thích hoặc dặn dò bệnh nhân..."
+                                    className="w-full p-2.5 text-xs rounded-xl bg-white dark:bg-[#1A1215] border border-pink-200 dark:border-pink-900 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#A55166]"
+                                  />
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setReplyingFeedbackId(null)}
+                                      className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+                                    >
+                                      Hủy
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isSavingAdminReply}
+                                      onClick={() => handleSaveAdminReply(f)}
+                                      className="px-3.5 py-1 text-[11px] font-extrabold bg-[#A55166] hover:bg-[#8C3E52] text-white rounded-lg shadow-sm cursor-pointer"
+                                    >
+                                      {isSavingAdminReply ? "Đang lưu..." : "Lưu phản hồi"}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
                               <div className="flex justify-end items-center gap-2 mt-1 pt-1.5 border-t border-dashed border-pink-100/40 dark:border-pink-900/10">
+                                {isLoggedIn && replyingFeedbackId !== f.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReplyingFeedbackId(f.id);
+                                      if (!adminReplyTexts[f.id] && f.adminReply) {
+                                        setAdminReplyTexts(prev => ({ ...prev, [f.id]: f.adminReply! }));
+                                      }
+                                    }}
+                                    className="text-[10px] font-extrabold text-[#A55166] dark:text-[#F2AFBC] hover:underline flex items-center gap-1 cursor-pointer bg-transparent border-0"
+                                  >
+                                    <MessageSquare size={11} /> {f.adminReply ? "Sửa trả lời" : "Trả lời nhận xét"}
+                                  </button>
+                                )}
+
                                 {f.isReported ? (
                                   <span className="text-[9px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-0.5">
                                     Đang kiểm duyệt
@@ -4879,6 +5404,26 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* ========================================== */}
+      {/* MODAL: ADMIN NOTIFICATION CENTER           */}
+      {/* ========================================== */}
+      <AdminNotificationModal
+        isOpen={showAdminNotificationModal}
+        onClose={() => setShowAdminNotificationModal(false)}
+        notifications={adminNotifications}
+        onMarkAsRead={handleMarkNotificationAsRead}
+        onMarkAllAsRead={handleMarkAllNotificationsAsRead}
+        onDeleteNotification={handleDeleteNotification}
+        onSelectPromptForFeedback={(promptId) => {
+          const char = prompts.find(p => String(p.id) === String(promptId));
+          if (char) {
+            handleOpenFeedback(char);
+          } else {
+            setHospitalArea("lounge");
+          }
+        }}
+      />
 
       {/* ========================================== */}
       {/* MODAL: ADMIN REPORTS MODERATION           */}

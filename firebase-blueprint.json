@@ -176,9 +176,83 @@
         "reportedAt": {
           "type": "string",
           "description": "Timestamp of report"
+        },
+        "adminReply": {
+          "type": "string",
+          "description": "Official admin response to this review"
+        },
+        "adminReplyAt": {
+          "type": "string",
+          "description": "Timestamp of admin reply"
+        },
+        "adminReplyAuthor": {
+          "type": "string",
+          "description": "Title or name of admin responding"
         }
       },
       "required": ["id", "promptId", "author", "comment", "rating", "timestamp"]
+    },
+    "notification": {
+      "title": "Admin Notification",
+      "description": "System alerts and feedback notifications for administrators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique notification ID" },
+        "type": { "type": "string", "description": "Type of event (feedback, report, etc.)" },
+        "title": { "type": "string", "description": "Notification title" },
+        "message": { "type": "string", "description": "Short message preview" },
+        "promptId": { "type": "string", "description": "Associated character/prompt ID if applicable" },
+        "promptName": { "type": "string", "description": "Name of character/prompt" },
+        "author": { "type": "string", "description": "Author who triggered notification" },
+        "timestamp": { "type": "string", "description": "ISO creation timestamp" },
+        "read": { "type": "boolean", "description": "Whether admin has read this alert" }
+      },
+      "required": ["id", "type", "title", "message", "timestamp", "read"]
+    },
+    "weeklyVote": {
+      "title": "Weekly Vote Tally",
+      "description": "Record of votes for staff members partitioned by week (Mon-Sun)",
+      "type": "object",
+      "properties": {
+        "weekKey": { "type": "string", "description": "Formatted week identifier like 2026-W45" },
+        "votes": { "type": "object", "description": "Mapping from characterId to vote count" },
+        "winnerId": { "type": "string", "description": "ID of leading/winning character" },
+        "winnerName": { "type": "string", "description": "Name of winner" },
+        "winnerVotes": { "type": "number", "description": "Top vote count" },
+        "updatedAt": { "type": "string", "description": "Last update timestamp" }
+      },
+      "required": ["weekKey", "votes"]
+    },
+    "loungePost": {
+      "title": "Sảnh Khoe Post",
+      "description": "Community lounge post shared by patients or staff",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique post ID" },
+        "author": { "type": "string", "description": "Custom pseudonym chosen for this post" },
+        "content": { "type": "string", "description": "Post body text up to 1000 words" },
+        "tag": { "type": "string", "description": "Category tag like Khoe Quà, Tâm Sự, Cảm Ơn, Góp Ý" },
+        "images": { "type": "array", "description": "Up to 4 compressed photo data URLs" },
+        "reactions": { "type": "object", "description": "Reaction count tallies by emoji key" },
+        "commentsCount": { "type": "number", "description": "Total replies count" },
+        "isPinned": { "type": "boolean", "description": "Whether post is pinned to top of lounge" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of creation" }
+      },
+      "required": ["id", "author", "content", "createdAt"]
+    },
+    "loungeComment": {
+      "title": "Sảnh Khoe Comment",
+      "description": "Reply comment on a lounge post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique comment ID" },
+        "postId": { "type": "string", "description": "Target post ID" },
+        "author": { "type": "string", "description": "Display nickname" },
+        "content": { "type": "string", "description": "Comment content text" },
+        "isAdmin": { "type": "boolean", "description": "Whether comment is from authenticated admin" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["id", "postId", "author", "content", "createdAt"]
     }
   },
   "firestore": {
@@ -201,6 +275,26 @@
     "feedbacks": {
       "schema": "feedback",
       "description": "Patient feedback and evaluation collection"
+    },
+    "admin_notifications": {
+      "schema": "notification",
+      "description": "Notifications and alerts for administration staff"
+    },
+    "weekly_votes": {
+      "schema": "weeklyVote",
+      "description": "Weekly voting scores and honors"
+    },
+    "lounge_posts": {
+      "schema": "loungePost",
+      "description": "Community lounge forum posts for Sảnh Khoe"
+    },
+    "lounge_comments": {
+      "schema": "loungeComment",
+      "description": "Replies and discussions on lounge posts"
+    },
+    "settings": {
+      "schema": "setting",
+      "description": "Application preferences and settings"
     }
   }
 }

@@ -260,9 +260,89 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
-/* Hide scrollbar for IE, Edge and Firefox */
-.no-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+/* Cute Anime Fonts (100% Vietnamese Diacritics Supported) */
+.font-nunito { font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif; }
+.font-comfortaa { font-family: 'Comfortaa', cursive, sans-serif; }
+.font-quicksand { font-family: 'Quicksand', sans-serif; }
+.font-itim { font-family: 'Itim', cursive, sans-serif; }
+.font-baloo { font-family: 'Baloo 2', cursive, sans-serif; }
+.font-be-vietnam { font-family: 'Be Vietnam Pro', sans-serif; }
+
+.font-cute-anime {
+  font-family: 'Nunito', 'Comfortaa', 'Quicksand', 'Itim', 'Baloo 2', sans-serif;
 }
+
+/* Anime Text Glow Animations */
+@keyframes animeGlowPulsePink {
+  0%, 100% {
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.95), 0 0 16px rgba(244, 114, 182, 0.85), 0 0 26px rgba(225, 29, 72, 0.65);
+    filter: drop-shadow(0 0 10px rgba(255, 182, 193, 0.75));
+  }
+  50% {
+    text-shadow: 0 0 14px rgba(255, 255, 255, 1), 0 0 24px rgba(251, 113, 133, 0.95), 0 0 36px rgba(225, 29, 72, 0.85);
+    filter: drop-shadow(0 0 18px rgba(255, 192, 203, 0.95));
+  }
+}
+
+@keyframes animeGlowPulseLavender {
+  0%, 100% {
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.95), 0 0 16px rgba(192, 132, 252, 0.85), 0 0 26px rgba(147, 51, 234, 0.65);
+    filter: drop-shadow(0 0 10px rgba(216, 180, 254, 0.75));
+  }
+  50% {
+    text-shadow: 0 0 14px rgba(255, 255, 255, 1), 0 0 24px rgba(168, 85, 247, 0.95), 0 0 36px rgba(126, 34, 206, 0.85);
+    filter: drop-shadow(0 0 18px rgba(233, 213, 255, 0.95));
+  }
+}
+
+@keyframes animeGlowPulseGold {
+  0%, 100% {
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.95), 0 0 16px rgba(251, 191, 36, 0.85), 0 0 26px rgba(217, 119, 6, 0.65);
+    filter: drop-shadow(0 0 10px rgba(253, 230, 138, 0.75));
+  }
+  50% {
+    text-shadow: 0 0 14px rgba(255, 255, 255, 1), 0 0 24px rgba(245, 158, 11, 0.95), 0 0 36px rgba(180, 83, 9, 0.85);
+    filter: drop-shadow(0 0 18px rgba(254, 240, 138, 0.95));
+  }
+}
+
+@keyframes animeGlowPulseCyan {
+  0%, 100% {
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.95), 0 0 16px rgba(56, 189, 248, 0.85), 0 0 26px rgba(2, 132, 199, 0.65);
+    filter: drop-shadow(0 0 10px rgba(186, 230, 253, 0.75));
+  }
+  50% {
+    text-shadow: 0 0 14px rgba(255, 255, 255, 1), 0 0 24px rgba(14, 165, 233, 0.95), 0 0 36px rgba(3, 105, 161, 0.85);
+    filter: drop-shadow(0 0 18px rgba(224, 242, 254, 0.95));
+  }
+}
+
+@keyframes animeGlowPulseMint {
+  0%, 100% {
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.95), 0 0 16px rgba(52, 211, 153, 0.85), 0 0 26px rgba(5, 150, 105, 0.65);
+    filter: drop-shadow(0 0 10px rgba(167, 243, 208, 0.75));
+  }
+  50% {
+    text-shadow: 0 0 14px rgba(255, 255, 255, 1), 0 0 24px rgba(16, 185, 129, 0.95), 0 0 36px rgba(4, 120, 87, 0.85);
+    filter: drop-shadow(0 0 18px rgba(209, 250, 229, 0.95));
+  }
+}
+
+.anime-text-glow-pink { animation: animeGlowPulsePink 3.5s ease-in-out infinite; }
+.anime-text-glow-lavender { animation: animeGlowPulseLavender 3.5s ease-in-out infinite; }
+.anime-text-glow-gold { animation: animeGlowPulseGold 3.5s ease-in-out infinite; }
+.anime-text-glow-cyan { animation: animeGlowPulseCyan 3.5s ease-in-out infinite; }
+.anime-text-glow-mint { animation: animeGlowPulseMint 3.5s ease-in-out infinite; }
+
+.anime-text-glow { animation: animeGlowPulsePink 3.5s ease-in-out infinite; }
+
+.anime-banner-glow-pink { box-shadow: 0 0 35px rgba(211, 140, 157, 0.5), 0 0 15px rgba(255, 255, 255, 0.35), inset 0 0 25px rgba(255, 255, 255, 0.35); }
+.anime-banner-glow-lavender { box-shadow: 0 0 35px rgba(168, 85, 247, 0.5), 0 0 15px rgba(255, 255, 255, 0.35), inset 0 0 25px rgba(255, 255, 255, 0.35); }
+.anime-banner-glow-gold { box-shadow: 0 0 35px rgba(245, 158, 11, 0.5), 0 0 15px rgba(255, 255, 255, 0.35), inset 0 0 25px rgba(255, 255, 255, 0.35); }
+.anime-banner-glow-cyan { box-shadow: 0 0 35px rgba(14, 165, 233, 0.5), 0 0 15px rgba(255, 255, 255, 0.35), inset 0 0 25px rgba(255, 255, 255, 0.35); }
+.anime-banner-glow-mint { box-shadow: 0 0 35px rgba(16, 185, 129, 0.5), 0 0 15px rgba(255, 255, 255, 0.35), inset 0 0 25px rgba(255, 255, 255, 0.35); }
+
+.anime-banner-glow { box-shadow: 0 0 35px rgba(211, 140, 157, 0.45), 0 0 15px rgba(255, 255, 255, 0.3), inset 0 0 25px rgba(255, 255, 255, 0.35); }
+
+
 
